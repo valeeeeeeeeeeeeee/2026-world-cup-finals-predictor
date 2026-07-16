@@ -13,9 +13,10 @@ single "probability of winning the title" per team:
      drawn matches go to a lower-intensity extra time, and matches still
      level are resolved by a penalty shootout modeled as a mildly
      Elo-tilted coin flip.
-  2. The trained Win/Draw/Loss ensemble classifier's 90-minute
-     probabilities, with the drawn mass reassigned to each side using the
-     same shootout-tilt logic (a final cannot end level).
+  2. The trained Win/Draw/Loss stacking classifier's 90-minute
+     probabilities (logistic meta-model over the logistic + GBM base
+     outputs), with the drawn mass reassigned to each side using the same
+     shootout-tilt logic (a final cannot end level).
 
 The reported title probability is the average of the two estimates.
 """
@@ -100,17 +101,21 @@ def simulate_match(goal_model, home, away, elo_diff_raw, n_sims=N_SIMS):
 
 
 def ensemble_class_probs(clf_bundle, feats: dict) -> dict:
-    """Weighted blend of each member's predict_proba, aligned to class labels."""
+    """Stacking: each base member's class probabilities (aligned to the
+    bundle's class order) are concatenated and fed to the trained meta-model,
+    whose output is the final probability vector."""
     classes = clf_bundle["classes"]
     X = pd.DataFrame([{k: feats[k] for k in clf_bundle["features"]}])
-    blended = np.zeros(len(classes))
+    base_probs = []
     for member in clf_bundle["members"]:
         model = member["model"]
         probs = model.predict_proba(X)[0]
-        aligned = np.array([probs[list(model.classes_).index(c)] for c in classes])
-        blended += member["weight"] * aligned
-    blended /= blended.sum()
-    return dict(zip(classes, blended))
+        base_probs.extend(probs[list(model.classes_).index(c)] for c in classes)
+
+    meta = clf_bundle["meta_model"]
+    meta_out = meta.predict_proba(np.array([base_probs]))[0]
+    aligned = np.array([meta_out[list(meta.classes_).index(c)] for c in classes])
+    return dict(zip(classes, aligned))
 
 
 def classifier_title_prob(clf_bundle, feats: dict, elo_diff_raw: float):

@@ -1,5 +1,6 @@
 {
   "n_train": 42229,
+  "n_meta_train_oof": 25456,
   "recency_half_life_years": 6.0,
   "features": [
     "elo_diff",
@@ -11,12 +12,10 @@
     "rest_diff",
     "k_weight"
   ],
+  "meta_features": "P(A),P(D),P(H) from logistic + P(A),P(D),P(H) from GBM",
+  "meta_oof_scheme": "expanding windows, 2-year blocks from 2000-01-01",
   "naive_baseline_log_loss_all": 1.049740871097385,
-  "ensemble_weights": {
-    "logistic": 0.65,
-    "gradient_boosting": 0.35
-  },
-  "deployed": "ensemble_logistic_gbm",
+  "deployed": "stacking_logistic_meta",
   "candidates_holdout": {
     "logistic": {
       "all_matches": {
@@ -42,7 +41,7 @@
         "n": 5449
       }
     },
-    "ensemble_logistic_gbm": {
+    "fixed_blend_065_035": {
       "all_matches": {
         "accuracy": 0.6073535464398409,
         "log_loss": 0.8609608486604923,
@@ -51,6 +50,18 @@
       "competitive": {
         "accuracy": 0.6175445035786383,
         "log_loss": 0.8462088618400574,
+        "n": 5449
+      }
+    },
+    "stacking_logistic_meta": {
+      "all_matches": {
+        "accuracy": 0.6069419673480587,
+        "log_loss": 0.8632001395521635,
+        "n": 7289
+      },
+      "competitive": {
+        "accuracy": 0.6180950633143696,
+        "log_loss": 0.8488254714496296,
         "n": 5449
       }
     }

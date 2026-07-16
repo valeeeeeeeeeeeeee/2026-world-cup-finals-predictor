@@ -18,15 +18,28 @@ Três componentes, combinados num ensemble final:
    cronológica seguindo as regras do [World Football Elo](https://www.eloratings.net/about):
    K-factor por importância da competição, escala por saldo de gols e bônus
    de mando para jogos não neutros.
-2. **Classificador V/E/D** (`src/features.py`, `src/train_model.py`) — ensemble
-   ponderado por recência (half-life de 6 anos) de regressão logística
-   multinomial + gradient boosting, blend fixo `0.65*logistic + 0.35*GBM`,
-   sobre features leak-free (diferença e nível de Elo, forma de 10 jogos,
-   dias de descanso, importância da competição, mando neutro).
+2. **Classificador V/E/D com stacking** (`src/features.py`, `src/train_model.py`)
+   — dois modelos base ponderados por recência (half-life de 6 anos):
+   regressão logística multinomial e gradient boosting, sobre features
+   leak-free (diferença e nível de Elo, forma de 10 jogos, dias de
+   descanso, importância da competição, mando neutro). Em vez de um blend
+   fixo, um **meta-modelo logístico** aprende a combinar as saídas dos dois:
+   recebe as 6 probabilidades (P(V), P(E), P(D) de cada base) e produz a
+   probabilidade final.
+
+   Para treinar o meta-modelo sem vazamento, os modelos base são reajustados
+   em janelas cronológicas expansivas (blocos de 2 anos desde 2000) e
+   prevêem apenas o bloco *seguinte* à sua janela — stacking out-of-fold
+   adaptado a dados temporais (25.456 exemplos de meta-treino, 2000–2026).
 
    Holdout temporal (treino < 2019, validação ≥ 2019), log-loss no domínio
-   competitivo: logístico 0.847, GBM 0.849, **ensemble 0.846 (deployed)**;
-   baseline ingênuo 1.05.
+   competitivo: logístico 0.847, GBM 0.849, blend fixo 0.65/0.35 (baseline
+   do modelo das semifinais) 0.846, **stacking 0.849 (deployed)**; baseline
+   ingênuo 1.05. Nota honesta: neste holdout o stacking **não supera** o
+   blend fixo — os dois modelos base são altamente correlacionados (ambos
+   guiados por Elo), então o teto de qualquer combinação é próximo do
+   melhor componente; o meta-modelo fica aqui por flexibilidade
+   metodológica, não por ganho comprovado.
 3. **Modelo Poisson de gols** (`src/poisson_model.py`) — forças de
    ataque/defesa estilo Dixon-Coles via regressão Poisson L2-regularizada
    (jogos desde 2015).
@@ -46,10 +59,10 @@ empate de duas formas e tira a média:
 |---|---|---|
 | Elo (véspera da final) | 2308 | 2287 |
 | Gols esperados (Poisson) | 1.12 | 1.17 |
-| 90 minutos (classificador) | 39.0% | 30.1% (empate 30.8%) |
+| 90 minutos (stacking) | 36.3% | 31.1% (empate 32.6%) |
 | Título — Monte Carlo | 48.8% | 51.2% |
-| Título — classificador | 54.8% | 45.2% |
-| **Título — ensemble final** | **51.8%** | **48.2%** |
+| Título — classificador | 52.9% | 47.1% |
+| **Título — ensemble final** | **50.9%** | **49.1%** |
 
 **Campeão previsto: Espanha — por margem mínima.**
 P(prorrogação) = 28.6%, P(pênaltis) = 15.4%.

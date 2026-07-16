@@ -11,17 +11,17 @@
       "Argentina": 1.17
     },
     "classifier_90min_prob": {
-      "home_win": 0.3902,
-      "draw": 0.3084,
-      "away_win": 0.3014
+      "home_win": 0.3629,
+      "draw": 0.326,
+      "away_win": 0.3111
     },
     "monte_carlo_title_prob": {
       "Spain": 0.4881,
       "Argentina": 0.5119
     },
     "classifier_title_prob": {
-      "Spain": 0.5476,
-      "Argentina": 0.4524
+      "Spain": 0.5293,
+      "Argentina": 0.4707
     },
     "p_extra_time": 0.2862,
     "p_penalties": 0.1537,
@@ -48,8 +48,8 @@
       }
     ],
     "final_title_probability": {
-      "Spain": 0.5179,
-      "Argentina": 0.4821
+      "Spain": 0.5087,
+      "Argentina": 0.4913
     },
     "predicted_champion": "Spain"
   }
