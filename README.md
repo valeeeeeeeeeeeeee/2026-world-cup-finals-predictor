@@ -6,11 +6,6 @@ Machine Learning model predicting the result of the 2026 FIFA World Cup final
 [martj42/international_results](https://github.com/martj42/international_results)
 dataset.
 
-Built on the same methodology as the semifinals model
-([2026_World_Cup_Semifinals](https://github.com/valeeeeeeeeeeeeee/2026_World_Cup_Semifinals)),
-retrained with both semifinal results included (cutoff at 2026-07-19, the eve
-of the final — no data leakage).
-
 ## Methodology
 
 Three components, combined into a final ensemble:
@@ -156,4 +151,3 @@ results/               trained model + metrics + prediction (generated)
 ## Credits
 
 Data: [martj42/international_results](https://github.com/martj42/international_results) (CC0).
-Methodology: [2026_World_Cup_Semifinals](https://github.com/valeeeeeeeeeeeeee/2026_World_Cup_Semifinals).
