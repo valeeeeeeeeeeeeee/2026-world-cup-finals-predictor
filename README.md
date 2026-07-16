@@ -1,158 +1,159 @@
 # ⚽ World Cup 2026 Final Predictor
 
-Modelo de Machine Learning para prever o resultado da final da Copa do Mundo de 2026
-(**Espanha x Argentina**, 19/07/2026, East Rutherford), usando o histórico de
-~49.500 jogos internacionais desde 1872 do dataset
-[martj42/international_results](https://github.com/martj42/international_results).
+Machine Learning model predicting the result of the 2026 FIFA World Cup final
+(**Spain vs Argentina**, 2026-07-19, East Rutherford), using the history of
+~49,500 international matches since 1872 from the
+[martj42/international_results](https://github.com/martj42/international_results)
+dataset.
 
-Usa a mesma metodologia do modelo das semifinais
+Built on the same methodology as the semifinals model
 ([2026_World_Cup_Semifinals](https://github.com/valeeeeeeeeeeeeee/2026_World_Cup_Semifinals)),
-retreinada com os resultados das duas semifinais incluídos (cutoff em
-2026-07-19, véspera da final — sem vazamento de dados).
+retrained with both semifinal results included (cutoff at 2026-07-19, the eve
+of the final — no data leakage).
 
-## Metodologia
+## Methodology
 
-Três componentes, combinados num ensemble final:
+Three components, combined into a final ensemble:
 
-1. **Ratings de força: Elo + Glicko-2** (`src/elo.py`, `src/glicko2.py`) —
-   todo o histórico é reprocessado em ordem cronológica por dois sistemas
-   complementares: Elo seguindo as regras do
-   [World Football Elo](https://www.eloratings.net/about) (K-factor por
-   importância da competição, escala por saldo de gols, bônus de mando) e
-   **Glicko-2** (Glickman), que além do rating estima o **RD (desvio do
-   rating — incerteza)** e a **volatilidade** de cada seleção. O Glicko-2
-   não usa margem de gols e reage de forma diferente a sequências recentes,
-   dando ao classificador um segundo sinal de força parcialmente
-   independente do Elo.
-2. **Classificador V/E/D com stacking de 3 bases** (`src/features.py`,
-   `src/combine.py`, `src/train_model.py`) — três modelos base:
+1. **Strength ratings: Elo + Glicko-2** (`src/elo.py`, `src/glicko2.py`) —
+   the full match history is replayed in chronological order by two
+   complementary systems: Elo following the
+   [World Football Elo](https://www.eloratings.net/about) rules (K-factor by
+   competition importance, goal-difference scaling, home-advantage bonus)
+   and **Glicko-2** (Glickman), which besides the rating also estimates each
+   team's **RD (rating deviation — uncertainty)** and **volatility**.
+   Glicko-2 ignores goal margin and reacts differently to recent runs,
+   giving the classifier a second strength signal partially independent
+   of Elo.
+2. **W/D/L classifier with 3-base stacking** (`src/features.py`,
+   `src/combine.py`, `src/train_model.py`) — three base models:
 
-   - regressão logística multinomial e **CatBoost**, ambos ponderados por
-     recência (half-life de 6 anos), sobre features leak-free (diferença e
-     nível de Elo, diferença de Glicko-2 e de RD, forma de 10 jogos, dias
-     de descanso, importância da competição, mando neutro);
-   - probabilidades **V/E/D do modelo Poisson** (matriz de placares a
-     partir dos gols esperados) — um sinal só fracamente correlacionado com
-     os dois classificadores guiados por ratings, que é a diversidade de
-     que uma combinação precisa.
+   - multinomial logistic regression and **CatBoost**, both recency-weighted
+     (6-year half-life), over leak-free features (Elo diff and level,
+     Glicko-2 diff and RD gap, 10-match form, rest days, competition
+     importance, neutral venue);
+   - **W/D/L probabilities from the Poisson model** (score matrix built
+     from expected goals) — a signal only weakly correlated with the two
+     rating-driven classifiers, which is exactly the diversity a
+     combination needs.
 
-   Um **meta-modelo logístico** combina as três saídas, recebendo os
-   **log-odds** das 9 probabilidades base + contexto do jogo (mando neutro,
-   importância da competição). Para treinar sem vazamento, as bases são
-   reajustadas em janelas cronológicas expansivas (blocos de 2 anos desde
-   2000; Poisson numa janela móvel de ~11 anos) e prevêem apenas o bloco
-   seguinte — 25.456 exemplos de meta-treino out-of-sample (2000–2026).
+   A **logistic meta-model** combines the three outputs, receiving the
+   **log-odds** of the 9 base probabilities + match context (neutral venue,
+   competition importance). To train it without leakage, the base models
+   are refit on expanding chronological windows (2-year blocks from 2000;
+   Poisson on a rolling ~11-year window) and predict only the block
+   *after* their training window — 25,456 out-of-sample meta-training
+   examples (2000–2026).
 
-   O `train_model.py` avalia quatro combinadores no holdout temporal
-   (treino < 2019, validação ≥ 2019) e publica o de menor log-loss
-   competitivo:
+   `train_model.py` evaluates four combiners on the temporal holdout
+   (train < 2019, validate ≥ 2019) and deploys the one with the lowest
+   competitive log-loss:
 
-   | Candidato | Log-loss competitivo |
+   | Candidate | Competitive log-loss |
    |---|---|
-   | Logístico sozinho | 0.8438 |
-   | CatBoost sozinho | 0.8439 |
-   | Poisson V/E/D sozinho | 0.8728 |
-   | Blend fixo 0.65/0.35 (baseline das semifinais) | 0.8428 |
-   | Média das 3 bases | 0.8440 |
+   | Logistic alone | 0.8438 |
+   | CatBoost alone | 0.8439 |
+   | Poisson W/D/L alone | 0.8728 |
+   | Fixed 0.65/0.35 blend (semifinals baseline) | 0.8428 |
+   | Average of the 3 bases | 0.8440 |
    | **Stacking v2 (deployed)** | **0.8391** |
-   | Média stacking + blend | 0.8402 |
+   | Average of stacking + blend | 0.8402 |
 
-   Baseline ingênuo: 1.05. Com a terceira base Poisson, os log-odds e o
-   contexto, o stacking passou a **superar o blend fixo** (0.8391 vs
-   0.8428) — a versão anterior, com meta-modelo sobre probabilidades cruas
-   de duas bases correlacionadas, perdia para o blend. Ressalva: escolher o
-   melhor de 4 combinadores no holdout é uma seleção leve; a margem exata
-   deve ser lida com esse desconto.
-3. **Modelo Poisson de gols** (`src/poisson_model.py`) — forças de
-   ataque/defesa estilo Dixon-Coles via regressão Poisson L2-regularizada
-   (jogos desde 2015).
+   Naive baseline: 1.05. With the third Poisson base, the log-odds and the
+   context features, stacking now **beats the fixed blend** (0.8391 vs
+   0.8428) — the previous version, a meta-model over raw probabilities of
+   two correlated bases, lost to the blend. Caveat: picking the best of 4
+   combiners on the holdout is mild selection; the exact margin should be
+   read with that grain of salt.
+3. **Poisson goal model** (`src/poisson_model.py`) — Dixon-Coles-style
+   attack/defense strengths via L2-regularized Poisson regression
+   (matches since 2015).
 
-Como uma final não pode terminar empatada, `src/predict_final.py` resolve o
-empate de duas formas e tira a média:
+Because a final cannot end in a draw, `src/predict_final.py` resolves the
+draw in two ways and averages them:
 
-- **Monte Carlo (50.000 simulações)**: gols do tempo normal ~ Poisson;
-  empate vai para prorrogação (taxas reescaladas para 30 min) e, se
-  persistir, pênaltis modelados como moeda levemente inclinada pelo Elo.
-- **Redistribuição do empate do classificador**: a massa de probabilidade
-  de empate em 90 min é redistribuída com a mesma inclinação de pênaltis.
+- **Monte Carlo (50,000 simulations)**: regulation goals ~ Poisson; a level
+  match goes to extra time (rates rescaled to 30 minutes) and, if still
+  level, penalties modeled as a coin flip mildly tilted by the Elo gap.
+- **Classifier draw redistribution**: the 90-minute draw probability mass
+  is reassigned to each side using the same shootout tilt.
 
-## Resultado — Espanha x Argentina
+## Result — Spain vs Argentina
 
-| Sinal | Espanha | Argentina |
+| Signal | Spain | Argentina |
 |---|---|---|
-| Elo (véspera da final) | 2308 | 2287 |
+| Elo (eve of the final) | 2308 | 2287 |
 | Glicko-2 (RD) | 1889 (67) | 1923 (71) |
-| Gols esperados (Poisson) | 1.12 | 1.17 |
-| 90 minutos (stacking v2) | 34.8% | 37.5% (empate 27.7%) |
-| Título — Monte Carlo | 48.8% | 51.2% |
-| Título — classificador | 48.9% | 51.1% |
-| **Título — ensemble final** | **48.9%** | **51.1%** |
+| Expected goals (Poisson) | 1.12 | 1.17 |
+| 90 minutes (stacking v2) | 34.8% | 37.5% (draw 27.7%) |
+| Title — Monte Carlo | 48.8% | 51.2% |
+| Title — classifier | 48.9% | 51.1% |
+| **Title — final ensemble** | **48.9%** | **51.1%** |
 
-**Campeã prevista: Argentina, por margem estreita.** Elo e Glicko-2
-discordam sobre quem é mais forte (Elo dá +21 para a Espanha; Glicko-2, que
-ignora margem de gols e reage mais rápido à sequência recente, dá +34 para
-a Argentina); o Poisson vê leve vantagem argentina no ataque. O meta-modelo,
-vendo os três sinais, pende para a Argentina.
-P(prorrogação) = 28.6%, P(pênaltis) = 15.4%.
-Placares mais prováveis em 90 min: 1x1 (13.3%), 0x1 (11.9%), 1x0 (11.4%).
+**Predicted champion: Argentina, by a narrow margin.** Elo and Glicko-2
+disagree about who is stronger (Elo gives Spain +21; Glicko-2, which ignores
+goal margin and reacts faster to recent runs, gives Argentina +34); the
+Poisson model sees a slight Argentine edge in attack. The meta-model, seeing
+all three signals, leans toward Argentina.
+P(extra time) = 28.6%, P(penalties) = 15.4%.
+Most likely 90-minute scores: 1-1 (13.3%), 0-1 (11.9%), 1-0 (11.4%).
 
-Detalhamento completo em `results/final_prediction.json`.
+Full breakdown in `results/final_prediction.json`.
 
-## Comparação de métodos
+## Method comparison
 
-Log-loss no holdout competitivo (treino < 2019, validação ≥ 2019) e a
-previsão que cada método dá para a final (título já resolve o empate via
-inclinação de pênaltis por Elo, 51%/49% pró-Espanha):
+Competitive-holdout log-loss (train < 2019, validate ≥ 2019) and each
+method's prediction for the final (the title columns already resolve the
+draw via the Elo-tilted shootout, 51%/49% in Spain's favor):
 
-| Método | Log-loss ↓ | Espanha (90') | Empate | Argentina (90') | Título ESP | Título ARG |
+| Method | Log-loss ↓ | Spain (90') | Draw | Argentina (90') | Title ESP | Title ARG |
 |---|---|---|---|---|---|---|
-| Logístico | 0.8438 | 34.4% | 31.8% | 33.8% | 50.6% | 49.4% |
+| Logistic | 0.8438 | 34.4% | 31.8% | 33.8% | 50.6% | 49.4% |
 | CatBoost | 0.8439 | 28.8% | 29.9% | 41.2% | 44.1% | 55.9% |
-| Poisson V/E/D | 0.8728 | 34.5% | 28.5% | 37.1% | 49.0% | 51.0% |
-| Blend fixo 0.65/0.35 | 0.8428 | 32.4% | 31.1% | 36.4% | 48.3% | 51.7% |
-| Média das 3 bases | 0.8440 | 32.6% | 30.1% | 37.4% | 47.9% | 52.1% |
+| Poisson W/D/L | 0.8728 | 34.5% | 28.5% | 37.1% | 49.0% | 51.0% |
+| Fixed 0.65/0.35 blend | 0.8428 | 32.4% | 31.1% | 36.4% | 48.3% | 51.7% |
+| Average of the 3 bases | 0.8440 | 32.6% | 30.1% | 37.4% | 47.9% | 52.1% |
 | **Stacking v2 (deployed)** | **0.8391** | 34.8% | 27.7% | 37.5% | 48.9% | 51.1% |
-| Média stacking + blend | 0.8402 | 33.6% | 29.4% | 37.0% | 48.6% | 51.4% |
-| Monte Carlo (simulação Poisson) | — | — | — | — | 48.8% | 51.2% |
-| **Ensemble final (MC + stacking)** | — | — | — | — | **48.9%** | **51.1%** |
+| Average of stacking + blend | 0.8402 | 33.6% | 29.4% | 37.0% | 48.6% | 51.4% |
+| Monte Carlo (Poisson simulation) | — | — | — | — | 48.8% | 51.2% |
+| **Final ensemble (MC + stacking)** | — | — | — | — | **48.9%** | **51.1%** |
 
-## Como rodar
+## Running it
 
 ```bash
 pip install -r requirements.txt
 cd src
-python train_model.py     # treina e salva o classificador ensemble
-python predict_final.py   # roda o pipeline completo e imprime/salva a previsão
+python train_model.py     # trains and saves the ensemble classifier
+python predict_final.py   # runs the full pipeline, prints + saves the prediction
 ```
 
-O `results.csv` é baixado automaticamente na primeira execução (já inclui
-os resultados das semifinais: Espanha 2x0 França, Argentina 2x1 Inglaterra).
+`results.csv` is downloaded automatically on first run (it already includes
+the semifinal results: Spain 2-0 France, Argentina 2-1 England).
 
-## Estrutura
+## Project layout
 
 ```
-src/data_io.py         download/carregamento do dataset
-src/elo.py             engine de rating Elo
-src/glicko2.py         engine de rating Glicko-2 (rating + RD + volatilidade)
-src/features.py        gerador cronológico de features (leak-free)
-src/combine.py         combinadores (blends, stacking) e Poisson V/E/D
-src/train_model.py     treina bases + meta, compara combinadores, publica o melhor
-src/poisson_model.py   modelo Poisson de gols estilo Dixon-Coles
-src/predict_final.py   pipeline completo -> previsão da final
-results/               modelo treinado + métricas + previsão (gerados)
+src/data_io.py         dataset download/loading
+src/elo.py             Elo rating engine
+src/glicko2.py         Glicko-2 rating engine (rating + RD + volatility)
+src/features.py        leak-free chronological feature builder
+src/combine.py         combiners (blends, stacking) and Poisson W/D/L
+src/train_model.py     trains bases + meta, compares combiners, deploys the best
+src/poisson_model.py   Dixon-Coles style Poisson goal model
+src/predict_final.py   full pipeline -> final prediction
+results/               trained model + metrics + prediction (generated)
 ```
 
-## Limitações
+## Caveats
 
-- Futebol internacional é intrinsecamente ruidoso; ~61% de acurácia num
-  problema de 3 classes é uma vantagem sólida sobre o baseline, não uma
-  bola de cristal.
-- Fatores de elenco (lesões, suspensões, viagem) não são modelados — apenas
-  Elo, forma recente e taxas de gols em nível de seleção.
-- A inclinação do shootout por Elo é uma hipótese de modelagem, não ajustada
-  em dados históricos de disputas de pênaltis.
+- International football is inherently noisy; ~61% accuracy on a 3-class
+  problem is a solid edge over the baseline, not a crystal ball.
+- Squad-level factors (injuries, suspensions, travel) are not modeled —
+  only team-level Elo, recent form and scoring rates.
+- The Elo shootout tilt is a modeling assumption, not fit to historical
+  penalty-shootout data.
 
-## Créditos
+## Credits
 
-Dados: [martj42/international_results](https://github.com/martj42/international_results) (CC0).
-Metodologia: [2026_World_Cup_Semifinals](https://github.com/valeeeeeeeeeeeeee/2026_World_Cup_Semifinals).
+Data: [martj42/international_results](https://github.com/martj42/international_results) (CC0).
+Methodology: [2026_World_Cup_Semifinals](https://github.com/valeeeeeeeeeeeeee/2026_World_Cup_Semifinals).
