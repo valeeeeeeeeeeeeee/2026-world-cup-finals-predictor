@@ -1,4 +1,4 @@
-# ⚽ World Cup 2026 Final Predictor
+# World Cup 2026 Final Predictor
 
 Machine Learning model predicting the result of the 2026 FIFA World Cup final
 (**Spain vs Argentina**, 2026-07-19, East Rutherford), using the history of
