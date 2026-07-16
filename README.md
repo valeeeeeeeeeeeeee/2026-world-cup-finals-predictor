@@ -98,6 +98,24 @@ Placares mais prováveis em 90 min: 1x1 (13.3%), 0x1 (11.9%), 1x0 (11.4%).
 
 Detalhamento completo em `results/final_prediction.json`.
 
+## Comparação de métodos
+
+Log-loss no holdout competitivo (treino < 2019, validação ≥ 2019) e a
+previsão que cada método dá para a final (título já resolve o empate via
+inclinação de pênaltis por Elo, 51%/49% pró-Espanha):
+
+| Método | Log-loss ↓ | Espanha (90') | Empate | Argentina (90') | Título ESP | Título ARG |
+|---|---|---|---|---|---|---|
+| Logístico | 0.8438 | 34.4% | 31.8% | 33.8% | 50.6% | 49.4% |
+| CatBoost | 0.8439 | 28.8% | 29.9% | 41.2% | 44.1% | 55.9% |
+| Poisson V/E/D | 0.8728 | 34.5% | 28.5% | 37.1% | 49.0% | 51.0% |
+| Blend fixo 0.65/0.35 | 0.8428 | 32.4% | 31.1% | 36.4% | 48.3% | 51.7% |
+| Média das 3 bases | 0.8440 | 32.6% | 30.1% | 37.4% | 47.9% | 52.1% |
+| **Stacking v2 (deployed)** | **0.8391** | 34.8% | 27.7% | 37.5% | 48.9% | 51.1% |
+| Média stacking + blend | 0.8402 | 33.6% | 29.4% | 37.0% | 48.6% | 51.4% |
+| Monte Carlo (simulação Poisson) | — | — | — | — | 48.8% | 51.2% |
+| **Ensemble final (MC + stacking)** | — | — | — | — | **48.9%** | **51.1%** |
+
 ## Como rodar
 
 ```bash
