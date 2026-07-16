@@ -150,4 +150,4 @@ results/               trained model + metrics + prediction (generated)
 
 ## Credits
 
-Data: [martj42/international_results](https://github.com/martj42/international_results) (CC0).
+Data: [martj42/international_results](https://github.com/martj42/international_results).
