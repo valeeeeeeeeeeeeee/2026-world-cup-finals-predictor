@@ -134,11 +134,11 @@ def main():
     results = load_results()
 
     home, away = FINAL["home"], FINAL["away"]
-    _, elo, form = build_dataset(results, cutoff_date=CUTOFF)
+    _, elo, glicko, form = build_dataset(results, cutoff_date=CUTOFF)
     goal_model = PoissonGoalModel().fit(results, cutoff_date=CUTOFF)
     clf_bundle = joblib.load(RESULTS_DIR / "classifier.joblib")
 
-    feats = fixture_features(elo, form, home, away, neutral=True, match_date=FINAL["date"])
+    feats = fixture_features(elo, glicko, form, home, away, neutral=True, match_date=FINAL["date"])
     elo_diff_raw = feats["home_elo"] - feats["away_elo"]
 
     mc = simulate_match(goal_model, home, away, elo_diff_raw)
@@ -153,6 +153,10 @@ def main():
             "venue": FINAL["venue"],
             "date": FINAL["date"],
             "elo": {home: round(feats["home_elo"], 1), away: round(feats["away_elo"], 1)},
+            "glicko2": {
+                home: {"rating": round(feats["home_glicko"], 1), "rd": round(feats["home_glicko_rd"], 1)},
+                away: {"rating": round(feats["away_glicko"], 1), "rd": round(feats["away_glicko_rd"], 1)},
+            },
             "poisson_expected_goals": {home: round(mc["mu_home"], 2), away: round(mc["mu_away"], 2)},
             "classifier_90min_prob": {
                 "home_win": round(clf["p_home_90"], 4),
@@ -170,7 +174,9 @@ def main():
     }
 
     print(f"=== WORLD CUP 2026 FINAL — {home} vs {away} ({FINAL['venue']}, {FINAL['date']}) ===")
-    print(f"Elo:  {home} {feats['home_elo']:.0f}  |  {away} {feats['away_elo']:.0f}")
+    print(f"Elo:      {home} {feats['home_elo']:.0f}  |  {away} {feats['away_elo']:.0f}")
+    print(f"Glicko-2: {home} {feats['home_glicko']:.0f} (RD {feats['home_glicko_rd']:.0f})"
+          f"  |  {away} {feats['away_glicko']:.0f} (RD {feats['away_glicko_rd']:.0f})")
     print(f"Poisson expected goals: {home} {mc['mu_home']:.2f} - {mc['mu_away']:.2f} {away}")
     print(f"Classifier 90':  {home} {clf['p_home_90']:.1%}  |  draw {clf['p_draw_90']:.1%}  |  {away} {clf['p_away_90']:.1%}")
     print(f"Monte Carlo title prob:  {home} {mc['p_home_title']:.1%}  |  {away} {mc['p_away_title']:.1%}")

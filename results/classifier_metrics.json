@@ -5,6 +5,8 @@
   "features": [
     "elo_diff",
     "elo_sum",
+    "glicko_diff",
+    "glicko_rd_diff",
     "neutral",
     "form_ppg_diff",
     "form_gf_diff",
@@ -19,49 +21,49 @@
   "candidates_holdout": {
     "logistic": {
       "all_matches": {
-        "accuracy": 0.607765125531623,
-        "log_loss": 0.8610934417441704,
+        "accuracy": 0.6106461791740979,
+        "log_loss": 0.8572851705594926,
         "n": 7289
       },
       "competitive": {
-        "accuracy": 0.6177280234905487,
-        "log_loss": 0.8468158576237079,
+        "accuracy": 0.618645623050101,
+        "log_loss": 0.843791721157417,
         "n": 5449
       }
     },
     "gradient_boosting": {
       "all_matches": {
-        "accuracy": 0.6052956509809302,
-        "log_loss": 0.864748220490117,
+        "accuracy": 0.6111949512964742,
+        "log_loss": 0.8583093798978213,
         "n": 7289
       },
       "competitive": {
-        "accuracy": 0.6155257845476234,
-        "log_loss": 0.8487830312334349,
+        "accuracy": 0.61827858322628,
+        "log_loss": 0.8438676834279296,
         "n": 5449
       }
     },
     "fixed_blend_065_035": {
       "all_matches": {
-        "accuracy": 0.6073535464398409,
-        "log_loss": 0.8609608486604923,
+        "accuracy": 0.6102346000823158,
+        "log_loss": 0.8566207155355628,
         "n": 7289
       },
       "competitive": {
-        "accuracy": 0.6175445035786383,
-        "log_loss": 0.8462088618400574,
+        "accuracy": 0.6190126628739219,
+        "log_loss": 0.8428483723679471,
         "n": 5449
       }
     },
     "stacking_logistic_meta": {
       "all_matches": {
-        "accuracy": 0.6069419673480587,
-        "log_loss": 0.8632001395521635,
+        "accuracy": 0.61105775826588,
+        "log_loss": 0.859280746878476,
         "n": 7289
       },
       "competitive": {
-        "accuracy": 0.6180950633143696,
-        "log_loss": 0.8488254714496296,
+        "accuracy": 0.6191961827858322,
+        "log_loss": 0.8459883744708316,
         "n": 5449
       }
     }

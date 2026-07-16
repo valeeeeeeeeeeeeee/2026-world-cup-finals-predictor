@@ -10,11 +10,12 @@ Methodology (evolved from the 2026_World_Cup_Semifinals model — the fixed
   1. **Recency weighting.** Training matches are weighted by an exponential
      decay on their age (6-year half-life), so current squad strength
      dominates and 40-year-old results barely count.
-  2. **Expanded, leak-free features** (Elo diff *and* level, goals-for /
-     goals-against form, rest days, competition importance).
+  2. **Expanded, leak-free features** (Elo diff *and* level, Glicko-2 diff
+     and rating-deviation gap, goals-for / goals-against form, rest days,
+     competition importance).
   3. **Stacking.** A multinomial logistic **meta-model** learns how to
-     combine the two base models (logistic regression + gradient boosting)
-     from their probability outputs. To train it without leakage, base
+     combine the two base models (logistic regression + CatBoost gradient
+     boosting) from their probability outputs. To train it without leakage, base
      models are refit on expanding chronological windows (2-year blocks
      from 2000 onward) and predict only the block *after* their training
      window — classic out-of-fold stacking, adapted to time-ordered data:
@@ -34,7 +35,7 @@ import json
 import joblib
 import numpy as np
 import pandas as pd
-from sklearn.ensemble import HistGradientBoostingClassifier
+from catboost import CatBoostClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, log_loss
 from sklearn.pipeline import make_pipeline
@@ -63,9 +64,10 @@ def _logistic():
 
 
 def _gbm():
-    return HistGradientBoostingClassifier(
-        max_iter=400, max_depth=3, learning_rate=0.04,
-        l2_regularization=2.0, min_samples_leaf=60, random_state=42,
+    return CatBoostClassifier(
+        loss_function="MultiClass", iterations=400, depth=3, learning_rate=0.04,
+        l2_leaf_reg=2.0, min_data_in_leaf=60, random_seed=42,
+        verbose=0, allow_writing_files=False,
     )
 
 
@@ -133,7 +135,7 @@ def _metrics_from_proba(y, proba):
 
 def main():
     results = load_results()
-    feat_df, elo, form = build_dataset(results, cutoff_date=str(CUTOFF.date()))
+    feat_df, elo, glicko, form = build_dataset(results, cutoff_date=str(CUTOFF.date()))
 
     train_df = feat_df[feat_df["date"] < SPLIT_DATE]
     holdout = feat_df[feat_df["date"] >= SPLIT_DATE]

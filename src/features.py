@@ -8,14 +8,16 @@ predict a match is only built from information available strictly before
 that match was played.
 
 Features recorded per match:
-  - elo_diff     : (home Elo + home advantage) - away Elo
-  - elo_sum      : home Elo + away Elo (overall strength/level of the tie)
-  - neutral      : 1 if played at a neutral venue
-  - form_ppg_diff: rolling 10-match points-per-game, home minus away
-  - form_gf_diff : rolling 10-match goals-scored/game, home minus away
-  - form_ga_diff : rolling 10-match goals-conceded/game, home minus away
-  - rest_diff    : days since each team's last match, home minus away (capped)
-  - k_weight     : competition-importance weight of the match (Elo K-factor)
+  - elo_diff       : (home Elo + home advantage) - away Elo
+  - elo_sum        : home Elo + away Elo (overall strength/level of the tie)
+  - glicko_diff    : (home Glicko-2 + home advantage) - away Glicko-2
+  - glicko_rd_diff : home Glicko-2 rating deviation - away RD (uncertainty gap)
+  - neutral        : 1 if played at a neutral venue
+  - form_ppg_diff  : rolling 10-match points-per-game, home minus away
+  - form_gf_diff   : rolling 10-match goals-scored/game, home minus away
+  - form_ga_diff   : rolling 10-match goals-conceded/game, home minus away
+  - rest_diff      : days since each team's last match, home minus away (capped)
+  - k_weight       : competition-importance weight of the match (Elo K-factor)
 """
 from __future__ import annotations
 
@@ -24,6 +26,7 @@ from collections import defaultdict, deque
 import pandas as pd
 
 from elo import EloEngine, HOME_ADVANTAGE, match_k_factor
+from glicko2 import Glicko2Engine
 
 FORM_WINDOW = 10
 REST_CAP_DAYS = 120
@@ -66,6 +69,8 @@ class FormTracker:
 FEATURE_COLS = [
     "elo_diff",
     "elo_sum",
+    "glicko_diff",
+    "glicko_rd_diff",
     "neutral",
     "form_ppg_diff",
     "form_gf_diff",
@@ -75,7 +80,7 @@ FEATURE_COLS = [
 ]
 
 
-def _row_features(elo, form, date, home, away, neutral):
+def _row_features(elo, glicko, form, date, home, away, neutral):
     home_elo = elo.get(home)
     away_elo = elo.get(away)
     home_ppg, home_gf, home_ga = form.get(home)
@@ -84,6 +89,8 @@ def _row_features(elo, form, date, home, away, neutral):
     return {
         "elo_diff": (home_elo + home_adv) - away_elo,
         "elo_sum": home_elo + away_elo,
+        "glicko_diff": (glicko.rating(home) + home_adv) - glicko.rating(away),
+        "glicko_rd_diff": glicko.rd(home) - glicko.rd(away),
         "neutral": int(neutral),
         "form_ppg_diff": home_ppg - away_ppg,
         "form_gf_diff": home_gf - away_gf,
@@ -91,12 +98,16 @@ def _row_features(elo, form, date, home, away, neutral):
         "rest_diff": form.rest_days(home, date) - form.rest_days(away, date),
         "home_elo": home_elo,
         "away_elo": away_elo,
+        "home_glicko": glicko.rating(home),
+        "away_glicko": glicko.rating(away),
+        "home_glicko_rd": glicko.rd(home),
+        "away_glicko_rd": glicko.rd(away),
     }
 
 
 def build_dataset(results: pd.DataFrame, cutoff_date: str | None = None):
-    """Returns (feature_df, fitted EloEngine, fitted FormTracker) using all
-    played matches strictly before cutoff_date."""
+    """Returns (feature_df, EloEngine, Glicko2Engine, FormTracker) fitted on
+    all played matches strictly before cutoff_date."""
     df = results.copy()
     df["date"] = pd.to_datetime(df["date"])
     df = df.dropna(subset=["home_score", "away_score"])
@@ -105,6 +116,7 @@ def build_dataset(results: pd.DataFrame, cutoff_date: str | None = None):
     df = df.sort_values("date").reset_index(drop=True)
 
     elo = EloEngine()
+    glicko = Glicko2Engine()
     form = FormTracker()
     rows = []
 
@@ -113,7 +125,7 @@ def build_dataset(results: pd.DataFrame, cutoff_date: str | None = None):
         hs, as_ = row.home_score, row.away_score
         neutral = bool(row.neutral)
 
-        feats = _row_features(elo, form, row.date, home, away, neutral)
+        feats = _row_features(elo, glicko, form, row.date, home, away, neutral)
 
         if hs > as_:
             outcome, home_pts, away_pts = "H", 3, 0
@@ -129,6 +141,8 @@ def build_dataset(results: pd.DataFrame, cutoff_date: str | None = None):
                 "away_team": away,
                 "elo_diff": feats["elo_diff"],
                 "elo_sum": feats["elo_sum"],
+                "glicko_diff": feats["glicko_diff"],
+                "glicko_rd_diff": feats["glicko_rd_diff"],
                 "neutral": feats["neutral"],
                 "form_ppg_diff": feats["form_ppg_diff"],
                 "form_gf_diff": feats["form_gf_diff"],
@@ -141,17 +155,19 @@ def build_dataset(results: pd.DataFrame, cutoff_date: str | None = None):
 
         # Update state AFTER recording features (no leakage).
         elo.process_match(row.date, home, away, hs, as_, row.tournament, neutral)
+        glicko.process_match(home, away, hs, as_, neutral)
         form.update(home, home_pts, int(hs), int(as_), row.date)
         form.update(away, away_pts, int(as_), int(hs), row.date)
 
-    return pd.DataFrame(rows), elo, form
+    return pd.DataFrame(rows), elo, glicko, form
 
 
-def fixture_features(elo: EloEngine, form: FormTracker, home: str, away: str,
-                     neutral: bool, match_date: str, tournament: str = "FIFA World Cup"):
+def fixture_features(elo: EloEngine, glicko: Glicko2Engine, form: FormTracker,
+                     home: str, away: str, neutral: bool, match_date: str,
+                     tournament: str = "FIFA World Cup"):
     """Feature vector for an upcoming (unplayed) fixture."""
     date = pd.Timestamp(match_date)
-    feats = _row_features(elo, form, date, home, away, neutral)
+    feats = _row_features(elo, glicko, form, date, home, away, neutral)
     feats["k_weight"] = match_k_factor(tournament)
     return feats
 
@@ -159,7 +175,7 @@ def fixture_features(elo: EloEngine, form: FormTracker, home: str, away: str,
 if __name__ == "__main__":
     from data_io import load_results
 
-    feat_df, elo, form = build_dataset(load_results(), cutoff_date="2026-07-19")
+    feat_df, elo, glicko, form = build_dataset(load_results(), cutoff_date="2026-07-19")
     print(feat_df.tail())
     print(feat_df["outcome"].value_counts(normalize=True))
-    print(fixture_features(elo, form, "Spain", "Argentina", neutral=True, match_date="2026-07-19"))
+    print(fixture_features(elo, glicko, form, "Spain", "Argentina", neutral=True, match_date="2026-07-19"))

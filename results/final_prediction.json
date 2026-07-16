@@ -6,22 +6,32 @@
       "Spain": 2308.2,
       "Argentina": 2286.7
     },
+    "glicko2": {
+      "Spain": {
+        "rating": 1889.3,
+        "rd": 67.5
+      },
+      "Argentina": {
+        "rating": 1922.5,
+        "rd": 70.6
+      }
+    },
     "poisson_expected_goals": {
       "Spain": 1.12,
       "Argentina": 1.17
     },
     "classifier_90min_prob": {
-      "home_win": 0.3629,
-      "draw": 0.326,
-      "away_win": 0.3111
+      "home_win": 0.2872,
+      "draw": 0.3229,
+      "away_win": 0.3899
     },
     "monte_carlo_title_prob": {
       "Spain": 0.4881,
       "Argentina": 0.5119
     },
     "classifier_title_prob": {
-      "Spain": 0.5293,
-      "Argentina": 0.4707
+      "Spain": 0.452,
+      "Argentina": 0.548
     },
     "p_extra_time": 0.2862,
     "p_penalties": 0.1537,
@@ -48,9 +58,9 @@
       }
     ],
     "final_title_probability": {
-      "Spain": 0.5087,
-      "Argentina": 0.4913
+      "Spain": 0.47,
+      "Argentina": 0.53
     },
-    "predicted_champion": "Spain"
+    "predicted_champion": "Argentina"
   }
 }
