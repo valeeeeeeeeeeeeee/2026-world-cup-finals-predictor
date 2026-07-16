@@ -1,0 +1,58 @@
+{
+  "n_train": 42229,
+  "recency_half_life_years": 6.0,
+  "features": [
+    "elo_diff",
+    "elo_sum",
+    "neutral",
+    "form_ppg_diff",
+    "form_gf_diff",
+    "form_ga_diff",
+    "rest_diff",
+    "k_weight"
+  ],
+  "naive_baseline_log_loss_all": 1.049740871097385,
+  "ensemble_weights": {
+    "logistic": 0.65,
+    "gradient_boosting": 0.35
+  },
+  "deployed": "ensemble_logistic_gbm",
+  "candidates_holdout": {
+    "logistic": {
+      "all_matches": {
+        "accuracy": 0.607765125531623,
+        "log_loss": 0.8610934417441704,
+        "n": 7289
+      },
+      "competitive": {
+        "accuracy": 0.6177280234905487,
+        "log_loss": 0.8468158576237079,
+        "n": 5449
+      }
+    },
+    "gradient_boosting": {
+      "all_matches": {
+        "accuracy": 0.6052956509809302,
+        "log_loss": 0.864748220490117,
+        "n": 7289
+      },
+      "competitive": {
+        "accuracy": 0.6155257845476234,
+        "log_loss": 0.8487830312334349,
+        "n": 5449
+      }
+    },
+    "ensemble_logistic_gbm": {
+      "all_matches": {
+        "accuracy": 0.6073535464398409,
+        "log_loss": 0.8609608486604923,
+        "n": 7289
+      },
+      "competitive": {
+        "accuracy": 0.6175445035786383,
+        "log_loss": 0.8462088618400574,
+        "n": 5449
+      }
+    }
+  }
+}

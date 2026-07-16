@@ -1,0 +1,56 @@
+{
+  "Spain vs Argentina": {
+    "venue": "East Rutherford",
+    "date": "2026-07-19",
+    "elo": {
+      "Spain": 2308.2,
+      "Argentina": 2286.7
+    },
+    "poisson_expected_goals": {
+      "Spain": 1.12,
+      "Argentina": 1.17
+    },
+    "classifier_90min_prob": {
+      "home_win": 0.3902,
+      "draw": 0.3084,
+      "away_win": 0.3014
+    },
+    "monte_carlo_title_prob": {
+      "Spain": 0.4881,
+      "Argentina": 0.5119
+    },
+    "classifier_title_prob": {
+      "Spain": 0.5476,
+      "Argentina": 0.4524
+    },
+    "p_extra_time": 0.2862,
+    "p_penalties": 0.1537,
+    "most_likely_scores_90min": [
+      {
+        "score": "1 x 1",
+        "prob": 0.1332
+      },
+      {
+        "score": "0 x 1",
+        "prob": 0.1192
+      },
+      {
+        "score": "1 x 0",
+        "prob": 0.1137
+      },
+      {
+        "score": "0 x 0",
+        "prob": 0.1017
+      },
+      {
+        "score": "1 x 2",
+        "prob": 0.0767
+      }
+    ],
+    "final_title_probability": {
+      "Spain": 0.5179,
+      "Argentina": 0.4821
+    },
+    "predicted_champion": "Spain"
+  }
+}
