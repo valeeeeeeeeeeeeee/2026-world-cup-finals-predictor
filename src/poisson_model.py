@@ -24,11 +24,11 @@ from sklearn.preprocessing import OneHotEncoder
 WINDOW_START = "2015-01-01"
 
 
-def _long_format(results: pd.DataFrame, cutoff_date: str) -> pd.DataFrame:
+def _long_format(results: pd.DataFrame, cutoff_date, window_start) -> pd.DataFrame:
     df = results.copy()
     df["date"] = pd.to_datetime(df["date"])
     df = df.dropna(subset=["home_score", "away_score"])
-    df = df[(df["date"] >= pd.Timestamp(WINDOW_START)) & (df["date"] < pd.Timestamp(cutoff_date))]
+    df = df[(df["date"] >= pd.Timestamp(window_start)) & (df["date"] < pd.Timestamp(cutoff_date))]
 
     home_rows = pd.DataFrame(
         {
@@ -55,8 +55,13 @@ class PoissonGoalModel:
         self.model: PoissonRegressor | None = None
         self.teams: set[str] = set()
 
-    def fit(self, results: pd.DataFrame, cutoff_date: str) -> "PoissonGoalModel":
-        long_df = _long_format(results, cutoff_date)
+    def fit(self, results: pd.DataFrame, cutoff_date, window_start=None) -> "PoissonGoalModel":
+        """window_start defaults to WINDOW_START; pass an explicit value when
+        fitting historical (out-of-fold) models so each fold sees a rolling
+        recent window of comparable length instead of a fixed calendar date."""
+        if window_start is None:
+            window_start = WINDOW_START
+        long_df = _long_format(results, cutoff_date, window_start)
         self.teams = set(long_df["team"]) | set(long_df["opponent"])
 
         self.encoder = OneHotEncoder(handle_unknown="ignore", sparse_output=True)
@@ -79,13 +84,19 @@ class PoissonGoalModel:
         return self
 
     def expected_goals(self, team: str, opponent: str, neutral: bool) -> float:
+        return float(self.expected_goals_batch([team], [opponent],
+                                               [0.0 if neutral else 1.0])[0])
+
+    def expected_goals_batch(self, teams, opponents, is_home) -> np.ndarray:
+        """Vectorized expected goals; `is_home` is 1.0 for the scoring side
+        playing at a declared home venue, else 0.0."""
         from scipy.sparse import hstack, csr_matrix
 
-        team_vec = self.encoder.transform(pd.DataFrame({"team": [team]}))
-        opp_vec = self.encoder.transform(pd.DataFrame({"team": [opponent]}))
-        home_val = csr_matrix(np.array([[0.0 if neutral else 1.0]]))
+        team_vec = self.encoder.transform(pd.DataFrame({"team": list(teams)}))
+        opp_vec = self.encoder.transform(pd.DataFrame({"team": list(opponents)}))
+        home_val = csr_matrix(np.asarray(is_home, dtype=float).reshape(-1, 1))
         X = hstack([team_vec, opp_vec, home_val]).tocsr()
-        return float(self.model.predict(X)[0])
+        return self.model.predict(X)
 
 
 if __name__ == "__main__":

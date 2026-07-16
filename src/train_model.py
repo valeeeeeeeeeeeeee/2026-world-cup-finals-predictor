@@ -1,32 +1,35 @@
 """
-Trains the outcome classifier (Win / Draw / Loss for the home side) on the
-full chronological feature set produced by features.py, evaluates the
-candidates on a held-out time slice, and saves the deployed model + a
-metrics report.
+Trains the outcome classifier (Win / Draw / Loss for the home side), compares
+several ways of COMBINING the base methods on a held-out time slice, and
+deploys the combiner with the lowest competitive-holdout log-loss.
 
-Methodology (evolved from the 2026_World_Cup_Semifinals model — the fixed
-0.65/0.35 blend is replaced by **stacking**):
+Base models (all leak-free, recency-weighted where applicable):
 
-  1. **Recency weighting.** Training matches are weighted by an exponential
-     decay on their age (6-year half-life), so current squad strength
-     dominates and 40-year-old results barely count.
-  2. **Expanded, leak-free features** (Elo diff *and* level, Glicko-2 diff
-     and rating-deviation gap, goals-for / goals-against form, rest days,
-     competition importance).
-  3. **Stacking.** A multinomial logistic **meta-model** learns how to
-     combine the two base models (logistic regression + CatBoost gradient
-     boosting) from their probability outputs. To train it without leakage, base
-     models are refit on expanding chronological windows (2-year blocks
-     from 2000 onward) and predict only the block *after* their training
-     window — classic out-of-fold stacking, adapted to time-ordered data:
-     every meta-training example is a genuine out-of-sample prediction.
-     The meta-model's 6 inputs are the two base models' class
-     probabilities; its training rows are recency-weighted like everything
-     else.
+  a. **Multinomial logistic regression** on the expanded feature set
+     (Elo diff/level, Glicko-2 diff and RD gap, 10-match form, rest days,
+     competition importance, neutral venue).
+  b. **CatBoost** gradient boosting on the same features.
+  c. **Dixon-Coles Poisson** W/D/L probabilities, derived from each side's
+     expected goals (attack/defense strengths on a rolling ~11-year window)
+     via the full score matrix. This base is only weakly correlated with
+     the two rating-driven classifiers — the diversity a combiner needs.
 
-Metrics are reported on ALL validation matches and on the **competitive**
-subset (real tournaments) — the domain a World Cup final lives in. The
-fixed 0.65/0.35 blend is kept as a reported baseline for comparison.
+Combiners evaluated (see combine.py):
+
+  - fixed_blend_lr_cb : 0.65*logistic + 0.35*catboost (semifinals baseline)
+  - equal_blend_3     : average of the three bases
+  - stacking_v2       : logistic meta-model over the LOG-ODDS of the nine
+                        base probabilities + match context (neutral,
+                        k_weight), trained on temporal out-of-fold
+                        predictions (expanding 2-year blocks from 2000;
+                        every meta-training row is a genuine out-of-sample
+                        prediction from all three bases)
+  - stack_blend_avg   : average of stacking_v2 and the fixed blend
+
+The champion combiner on the competitive holdout is deployed. Note: picking
+the best of four on the holdout is mild selection; the candidates are few
+and structurally motivated, but the winning margin should be read with that
+grain of salt.
 """
 from __future__ import annotations
 
@@ -41,18 +44,19 @@ from sklearn.metrics import accuracy_score, log_loss
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
+from combine import CLASSES, COMBINERS, combine_probs, meta_matrix, poisson_wdl
 from data_io import load_results, RESULTS_DIR
 from features import build_dataset, FEATURE_COLS
+from poisson_model import PoissonGoalModel
 
-CLASSES = ["A", "D", "H"]
 SPLIT_DATE = pd.Timestamp("2019-01-01")  # train < this <= holdout
 RECENCY_HALF_LIFE_YEARS = 6.0
 FRIENDLY_K = 20  # matches with k_weight above this are competitive
-BLEND_WEIGHTS = {"logistic": 0.65, "gradient_boosting": 0.35}  # baseline only
 CUTOFF = pd.Timestamp("2026-07-19")  # eve of the final: semifinals included
 
 META_BLOCKS_START = pd.Timestamp("2000-01-01")  # ~128 years of history before the 1st block
 META_BLOCK_YEARS = 2
+POISSON_WINDOW_YEARS = 11  # rolling window length for historical Poisson fits
 
 
 def recency_weights(dates: pd.Series, reference: pd.Timestamp) -> np.ndarray:
@@ -63,7 +67,7 @@ def _logistic():
     return make_pipeline(StandardScaler(), LogisticRegression(max_iter=3000, C=1.0))
 
 
-def _gbm():
+def _catboost():
     return CatBoostClassifier(
         loss_function="MultiClass", iterations=400, depth=3, learning_rate=0.04,
         l2_leaf_reg=2.0, min_data_in_leaf=60, random_seed=42,
@@ -72,7 +76,7 @@ def _gbm():
 
 
 def _meta():
-    return LogisticRegression(max_iter=3000, C=1.0)
+    return make_pipeline(StandardScaler(), LogisticRegression(max_iter=3000, C=1.0))
 
 
 def _fit(model, df, reference, is_pipeline):
@@ -91,22 +95,33 @@ def _proba(model, df):
     return p[:, idx]
 
 
-def _align(model, p):
-    """Single predict_proba matrix re-ordered into CLASSES order."""
-    idx = [list(model.classes_).index(c) for c in CLASSES]
-    return p[:, idx]
+def _poisson_probs(goal_model: PoissonGoalModel, df: pd.DataFrame) -> np.ndarray:
+    """W/D/L probabilities for each row of a feature frame."""
+    is_home = 1.0 - df["neutral"].to_numpy(dtype=float)
+    mu_home = goal_model.expected_goals_batch(df["home_team"], df["away_team"], is_home)
+    mu_away = goal_model.expected_goals_batch(df["away_team"], df["home_team"],
+                                              np.zeros(len(df)))
+    return poisson_wdl(mu_home, mu_away)
 
 
-def build_oof_meta_dataset(feat_df: pd.DataFrame, end: pd.Timestamp):
+def _fit_poisson(results: pd.DataFrame, cutoff: pd.Timestamp) -> PoissonGoalModel:
+    window_start = cutoff - pd.DateOffset(years=POISSON_WINDOW_YEARS)
+    return PoissonGoalModel().fit(results, cutoff_date=cutoff, window_start=window_start)
+
+
+def _context(df: pd.DataFrame) -> np.ndarray:
+    return df[["neutral", "k_weight"]].to_numpy(dtype=float)
+
+
+def build_oof_meta_dataset(results: pd.DataFrame, feat_df: pd.DataFrame, end: pd.Timestamp):
     """Out-of-fold base-model predictions for meta-model training.
 
     Expanding chronological windows: for each META_BLOCK_YEARS block between
-    META_BLOCKS_START and `end`, both base models are fit on everything
-    strictly before the block (recency-weighted to the block start) and
-    predict only that block. No block is ever predicted by a model that saw
-    it — the meta-model trains exclusively on out-of-sample outputs.
+    META_BLOCKS_START and `end`, all three base models are fit on data
+    strictly before the block and predict only that block — every
+    meta-training example is a genuine out-of-sample prediction.
     """
-    X_parts, y_parts, date_parts = [], [], []
+    lr_parts, cb_parts, pois_parts, ctx_parts, y_parts, date_parts = [], [], [], [], [], []
     for block_start in pd.date_range(META_BLOCKS_START, end, freq=f"{META_BLOCK_YEARS}YS"):
         block_end = min(block_start + pd.DateOffset(years=META_BLOCK_YEARS), end)
         train = feat_df[feat_df["date"] < block_start]
@@ -114,15 +129,29 @@ def build_oof_meta_dataset(feat_df: pd.DataFrame, end: pd.Timestamp):
         if train.empty or block.empty:
             continue
         lr = _fit(_logistic(), train, block_start, is_pipeline=True)
-        gb = _fit(_gbm(), train, block_start, is_pipeline=False)
-        X_parts.append(np.hstack([_proba(lr, block), _proba(gb, block)]))
+        cb = _fit(_catboost(), train, block_start, is_pipeline=False)
+        pois = _fit_poisson(results, block_start)
+
+        lr_parts.append(_proba(lr, block))
+        cb_parts.append(_proba(cb, block))
+        pois_parts.append(_poisson_probs(pois, block))
+        ctx_parts.append(_context(block))
         y_parts.append(block["outcome"].to_numpy())
         date_parts.append(block["date"].to_numpy())
-    return (
-        np.vstack(X_parts),
-        np.concatenate(y_parts),
-        pd.Series(pd.to_datetime(np.concatenate(date_parts))),
-    )
+    return {
+        "lr": np.vstack(lr_parts),
+        "cb": np.vstack(cb_parts),
+        "pois": np.vstack(pois_parts),
+        "context": np.vstack(ctx_parts),
+        "y": np.concatenate(y_parts),
+        "dates": pd.Series(pd.to_datetime(np.concatenate(date_parts))),
+    }
+
+
+def _fit_meta(oof: dict, mask: np.ndarray, reference: pd.Timestamp):
+    X = meta_matrix(oof["lr"][mask], oof["cb"][mask], oof["pois"][mask], oof["context"][mask])
+    sw = recency_weights(oof["dates"][mask], reference).values
+    return _meta().fit(X, oof["y"][mask], logisticregression__sample_weight=sw)
 
 
 def _metrics_from_proba(y, proba):
@@ -139,96 +168,80 @@ def main():
 
     train_df = feat_df[feat_df["date"] < SPLIT_DATE]
     holdout = feat_df[feat_df["date"] >= SPLIT_DATE]
-    holdout_comp = holdout[holdout["k_weight"] > FRIENDLY_K]
 
-    # --- Out-of-fold meta dataset over the full pre-cutoff history.
-    # Blocks before SPLIT_DATE are identical whether built to SPLIT_DATE or
-    # to CUTOFF (each block only sees data before itself), so build once and
-    # slice for the leak-free evaluation fit.
     print("Building out-of-fold meta dataset (expanding chronological windows)...")
-    meta_X, meta_y, meta_dates = build_oof_meta_dataset(feat_df, end=CUTOFF)
-    print(f"  meta-training rows: {len(meta_y)} "
-          f"({meta_dates.min().date()} .. {meta_dates.max().date()})")
+    oof = build_oof_meta_dataset(results, feat_df, end=CUTOFF)
+    print(f"  meta-training rows: {len(oof['y'])} "
+          f"({oof['dates'].min().date()} .. {oof['dates'].max().date()})")
 
-    # --- Evaluation: base models fit on < SPLIT_DATE; meta-model fit only on
-    # OOF rows from < SPLIT_DATE. Holdout never touches either fit.
+    # --- Evaluation: bases fit on < SPLIT_DATE; meta fit only on OOF rows
+    # from < SPLIT_DATE. The holdout never touches any fit.
     lr = _fit(_logistic(), train_df, SPLIT_DATE, is_pipeline=True)
-    gb = _fit(_gbm(), train_df, SPLIT_DATE, is_pipeline=False)
+    cb = _fit(_catboost(), train_df, SPLIT_DATE, is_pipeline=False)
+    pois = _fit_poisson(results, SPLIT_DATE)
+    meta_eval = _fit_meta(oof, (oof["dates"] < SPLIT_DATE).to_numpy(), SPLIT_DATE)
 
-    eval_mask = (meta_dates < SPLIT_DATE).to_numpy()
-    meta_eval = _meta().fit(
-        meta_X[eval_mask], meta_y[eval_mask],
-        sample_weight=recency_weights(meta_dates[eval_mask], SPLIT_DATE).values,
-    )
+    ho_lr, ho_cb = _proba(lr, holdout), _proba(cb, holdout)
+    ho_pois, ho_ctx = _poisson_probs(pois, holdout), _context(holdout)
+    comp_mask = (holdout["k_weight"] > FRIENDLY_K).to_numpy()
 
-    def blend_proba(df):
-        return (BLEND_WEIGHTS["logistic"] * _proba(lr, df)
-                + BLEND_WEIGHTS["gradient_boosting"] * _proba(gb, df))
-
-    def stack_proba(df):
-        X = np.hstack([_proba(lr, df), _proba(gb, df)])
-        return _align(meta_eval, meta_eval.predict_proba(X))
-
-    def block(model_proba_fn):
+    def block(proba):
         return {
-            "all_matches": _metrics_from_proba(holdout["outcome"], model_proba_fn(holdout)),
-            "competitive": _metrics_from_proba(holdout_comp["outcome"], model_proba_fn(holdout_comp)),
+            "all_matches": _metrics_from_proba(holdout["outcome"], proba),
+            "competitive": _metrics_from_proba(holdout["outcome"][comp_mask], proba[comp_mask]),
         }
 
     candidates = {
-        "logistic": block(lambda d: _proba(lr, d)),
-        "gradient_boosting": block(lambda d: _proba(gb, d)),
-        "fixed_blend_065_035": block(blend_proba),
-        "stacking_logistic_meta": block(stack_proba),
+        "logistic": block(ho_lr),
+        "catboost": block(ho_cb),
+        "poisson_wdl": block(ho_pois),
     }
+    for name in COMBINERS:
+        candidates[name] = block(
+            combine_probs(name, ho_lr, ho_cb, ho_pois, ho_ctx, meta_eval))
+
+    deployed = min(COMBINERS, key=lambda n: candidates[n]["competitive"]["log_loss"])
 
     prior = train_df["outcome"].value_counts(normalize=True).reindex(CLASSES).fillna(0).values
     naive_ll = log_loss(holdout["outcome"], np.tile(prior, (len(holdout), 1)), labels=CLASSES)
 
     metrics = {
         "n_train": int(len(train_df)),
-        "n_meta_train_oof": int(len(meta_y)),
+        "n_meta_train_oof": int(len(oof["y"])),
         "recency_half_life_years": RECENCY_HALF_LIFE_YEARS,
         "features": FEATURE_COLS,
-        "meta_features": "P(A),P(D),P(H) from logistic + P(A),P(D),P(H) from GBM",
+        "meta_features": "log-odds of 9 base probs (logistic, catboost, poisson) + neutral + k_weight",
         "meta_oof_scheme": f"expanding windows, {META_BLOCK_YEARS}-year blocks from {META_BLOCKS_START.date()}",
         "naive_baseline_log_loss_all": naive_ll,
-        "deployed": "stacking_logistic_meta",
+        "deployed": deployed,
         "candidates_holdout": candidates,
     }
     print("\nCompetitive holdout log-loss by candidate:")
-    for name in ("logistic", "gradient_boosting", "fixed_blend_065_035", "stacking_logistic_meta"):
-        ll = candidates[name]["competitive"]["log_loss"]
-        mark = "  <- deployed" if name == "stacking_logistic_meta" else ""
-        print(f"  {name:24s} {ll:.4f}{mark}")
+    for name, cand in candidates.items():
+        mark = "  <- deployed" if name == deployed else ""
+        print(f"  {name:20s} {cand['competitive']['log_loss']:.4f}{mark}")
 
-    # --- Deploy: refit base models on ALL history up to the eve of the
-    # final; refit the meta-model on the full OOF dataset (recency-weighted
-    # to the cutoff).
+    # --- Deploy: refit all bases on ALL history up to the eve of the final;
+    # meta on the full OOF dataset (recency-weighted to the cutoff).
     lr_full = _fit(_logistic(), feat_df, CUTOFF, is_pipeline=True)
-    gb_full = _fit(_gbm(), feat_df, CUTOFF, is_pipeline=False)
-    meta_full = _meta().fit(
-        meta_X, meta_y, sample_weight=recency_weights(meta_dates, CUTOFF).values,
-    )
+    cb_full = _fit(_catboost(), feat_df, CUTOFF, is_pipeline=False)
+    meta_full = _fit_meta(oof, np.ones(len(oof["y"]), dtype=bool), CUTOFF)
 
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(RESULTS_DIR / "classifier_metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
     joblib.dump(
         {
-            "members": [
-                {"name": "logistic", "model": lr_full},
-                {"name": "gradient_boosting", "model": gb_full},
-            ],
+            "combiner": deployed,
+            "members": {"logistic": lr_full, "catboost": cb_full},
             "meta_model": meta_full,
             "features": FEATURE_COLS,
             "classes": CLASSES,
-            "name": "stacking_logistic_meta",
+            "name": deployed,
         },
         RESULTS_DIR / "classifier.joblib",
     )
-    print("\nDeployed: stacking (logistic meta-model over logistic + GBM outputs)"
-          " -> results/classifier.joblib")
+    print(f"\nDeployed combiner: {deployed} -> results/classifier.joblib")
 
 
 if __name__ == "__main__":

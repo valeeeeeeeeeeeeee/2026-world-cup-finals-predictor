@@ -14,10 +14,10 @@
     "rest_diff",
     "k_weight"
   ],
-  "meta_features": "P(A),P(D),P(H) from logistic + P(A),P(D),P(H) from GBM",
+  "meta_features": "log-odds of 9 base probs (logistic, catboost, poisson) + neutral + k_weight",
   "meta_oof_scheme": "expanding windows, 2-year blocks from 2000-01-01",
   "naive_baseline_log_loss_all": 1.049740871097385,
-  "deployed": "stacking_logistic_meta",
+  "deployed": "stacking_v2",
   "candidates_holdout": {
     "logistic": {
       "all_matches": {
@@ -31,7 +31,7 @@
         "n": 5449
       }
     },
-    "gradient_boosting": {
+    "catboost": {
       "all_matches": {
         "accuracy": 0.6111949512964742,
         "log_loss": 0.8583093798978213,
@@ -43,7 +43,19 @@
         "n": 5449
       }
     },
-    "fixed_blend_065_035": {
+    "poisson_wdl": {
+      "all_matches": {
+        "accuracy": 0.5966524900535053,
+        "log_loss": 0.8866112535323832,
+        "n": 7289
+      },
+      "competitive": {
+        "accuracy": 0.6048816296568178,
+        "log_loss": 0.8727949659973415,
+        "n": 5449
+      }
+    },
+    "fixed_blend_lr_cb": {
       "all_matches": {
         "accuracy": 0.6102346000823158,
         "log_loss": 0.8566207155355628,
@@ -55,15 +67,39 @@
         "n": 5449
       }
     },
-    "stacking_logistic_meta": {
+    "equal_blend_3": {
       "all_matches": {
-        "accuracy": 0.61105775826588,
-        "log_loss": 0.859280746878476,
+        "accuracy": 0.6111949512964742,
+        "log_loss": 0.8582446022940591,
         "n": 7289
       },
       "competitive": {
-        "accuracy": 0.6191961827858322,
-        "log_loss": 0.8459883744708316,
+        "accuracy": 0.6180950633143696,
+        "log_loss": 0.8439898615033211,
+        "n": 5449
+      }
+    },
+    "stacking_v2": {
+      "all_matches": {
+        "accuracy": 0.6099602140211278,
+        "log_loss": 0.8536789057245802,
+        "n": 7289
+      },
+      "competitive": {
+        "accuracy": 0.6175445035786383,
+        "log_loss": 0.8390943030754889,
+        "n": 5449
+      }
+    },
+    "stack_blend_avg": {
+      "all_matches": {
+        "accuracy": 0.6105089861435039,
+        "log_loss": 0.8543595940298463,
+        "n": 7289
+      },
+      "competitive": {
+        "accuracy": 0.6177280234905487,
+        "log_loss": 0.840197141418137,
         "n": 5449
       }
     }

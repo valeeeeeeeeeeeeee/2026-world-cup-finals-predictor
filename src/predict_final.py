@@ -28,6 +28,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from combine import combine_probs, poisson_wdl
 from data_io import load_results, RESULTS_DIR
 from features import build_dataset, fixture_features
 from poisson_model import PoissonGoalModel
@@ -46,10 +47,7 @@ def shootout_win_prob(elo_diff_raw: float) -> float:
     return 1.0 / (1.0 + 10 ** (-elo_diff_raw / 1200.0))
 
 
-def simulate_match(goal_model, home, away, elo_diff_raw, n_sims=N_SIMS):
-    mu_home = goal_model.expected_goals(home, away, neutral=True)
-    mu_away = goal_model.expected_goals(away, home, neutral=True)
-
+def simulate_match(mu_home, mu_away, elo_diff_raw, n_sims=N_SIMS):
     home_reg = RNG.poisson(mu_home, size=n_sims)
     away_reg = RNG.poisson(mu_away, size=n_sims)
 
@@ -100,26 +98,30 @@ def simulate_match(goal_model, home, away, elo_diff_raw, n_sims=N_SIMS):
     }
 
 
-def ensemble_class_probs(clf_bundle, feats: dict) -> dict:
-    """Stacking: each base member's class probabilities (aligned to the
-    bundle's class order) are concatenated and fed to the trained meta-model,
-    whose output is the final probability vector."""
+def ensemble_class_probs(clf_bundle, feats: dict, mu_home: float, mu_away: float) -> dict:
+    """Apply the deployed combiner (see combine.py) to the three aligned base
+    signals: logistic + CatBoost class probabilities and the Poisson-derived
+    W/D/L probabilities, with match context for the meta-model."""
     classes = clf_bundle["classes"]
     X = pd.DataFrame([{k: feats[k] for k in clf_bundle["features"]}])
-    base_probs = []
-    for member in clf_bundle["members"]:
-        model = member["model"]
+
+    def aligned(model):
         probs = model.predict_proba(X)[0]
-        base_probs.extend(probs[list(model.classes_).index(c)] for c in classes)
+        return np.array([[probs[list(model.classes_).index(c)] for c in classes]])
 
-    meta = clf_bundle["meta_model"]
-    meta_out = meta.predict_proba(np.array([base_probs]))[0]
-    aligned = np.array([meta_out[list(meta.classes_).index(c)] for c in classes])
-    return dict(zip(classes, aligned))
+    lr_p = aligned(clf_bundle["members"]["logistic"])
+    cb_p = aligned(clf_bundle["members"]["catboost"])
+    pois_p = poisson_wdl(mu_home, mu_away)
+    context = np.array([[feats["neutral"], feats["k_weight"]]], dtype=float)
+
+    out = combine_probs(clf_bundle["combiner"], lr_p, cb_p, pois_p, context,
+                        clf_bundle["meta_model"])[0]
+    return dict(zip(classes, out))
 
 
-def classifier_title_prob(clf_bundle, feats: dict, elo_diff_raw: float):
-    class_probs = ensemble_class_probs(clf_bundle, feats)
+def classifier_title_prob(clf_bundle, feats: dict, elo_diff_raw: float,
+                          mu_home: float, mu_away: float):
+    class_probs = ensemble_class_probs(clf_bundle, feats, mu_home, mu_away)
     p_home, p_draw, p_away = class_probs["H"], class_probs["D"], class_probs["A"]
 
     p_home_shootout = shootout_win_prob(elo_diff_raw)
@@ -140,9 +142,11 @@ def main():
 
     feats = fixture_features(elo, glicko, form, home, away, neutral=True, match_date=FINAL["date"])
     elo_diff_raw = feats["home_elo"] - feats["away_elo"]
+    mu_home = goal_model.expected_goals(home, away, neutral=True)
+    mu_away = goal_model.expected_goals(away, home, neutral=True)
 
-    mc = simulate_match(goal_model, home, away, elo_diff_raw)
-    clf = classifier_title_prob(clf_bundle, feats, elo_diff_raw)
+    mc = simulate_match(mu_home, mu_away, elo_diff_raw)
+    clf = classifier_title_prob(clf_bundle, feats, elo_diff_raw, mu_home, mu_away)
 
     title_home = (mc["p_home_title"] + clf["p_home_title"]) / 2.0
     title_away = 1.0 - title_home
