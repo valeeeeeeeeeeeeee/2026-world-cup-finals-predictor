@@ -28,7 +28,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from combine import combine_probs, poisson_wdl
+from combine import COMBINERS, combine_probs, poisson_wdl
 from data_io import load_results, RESULTS_DIR
 from features import build_dataset, fixture_features
 from poisson_model import PoissonGoalModel
@@ -36,6 +36,7 @@ from poisson_model import PoissonGoalModel
 CUTOFF = "2026-07-19"
 N_SIMS = 50_000
 RNG = np.random.default_rng(42)
+SCORE_GRID = 7  # 0..6 goals per side in the exported 90-minute score matrix
 
 FINAL = {"home": "Spain", "away": "Argentina",
          "venue": "East Rutherford", "date": "2026-07-19"}
@@ -87,6 +88,10 @@ def simulate_match(mu_home, mu_away, elo_diff_raw, n_sims=N_SIMS):
         for (h, a), p in scores.head(5).items()
     ]
 
+    score_matrix = np.zeros((SCORE_GRID, SCORE_GRID))
+    in_grid = (home_reg < SCORE_GRID) & (away_reg < SCORE_GRID)
+    np.add.at(score_matrix, (home_reg[in_grid], away_reg[in_grid]), 1.0 / n_sims)
+
     return {
         "mu_home": mu_home,
         "mu_away": mu_away,
@@ -95,13 +100,13 @@ def simulate_match(mu_home, mu_away, elo_diff_raw, n_sims=N_SIMS):
         "p_extra_time": p_extra_time,
         "p_penalties": p_penalties,
         "top_scores": top_scores,
+        "score_matrix": score_matrix,
     }
 
 
-def ensemble_class_probs(clf_bundle, feats: dict, mu_home: float, mu_away: float) -> dict:
-    """Apply the deployed combiner (see combine.py) to the three aligned base
-    signals: logistic + CatBoost class probabilities and the Poisson-derived
-    W/D/L probabilities, with match context for the meta-model."""
+def _base_signals(clf_bundle, feats: dict, mu_home: float, mu_away: float):
+    """The three aligned base signals (logistic, CatBoost, Poisson W/D/L) and
+    the match context the meta-model expects."""
     classes = clf_bundle["classes"]
     X = pd.DataFrame([{k: feats[k] for k in clf_bundle["features"]}])
 
@@ -113,10 +118,37 @@ def ensemble_class_probs(clf_bundle, feats: dict, mu_home: float, mu_away: float
     cb_p = aligned(clf_bundle["members"]["catboost"])
     pois_p = poisson_wdl(mu_home, mu_away)
     context = np.array([[feats["neutral"], feats["k_weight"]]], dtype=float)
+    return lr_p, cb_p, pois_p, context
 
-    out = combine_probs(clf_bundle["combiner"], lr_p, cb_p, pois_p, context,
+
+def ensemble_class_probs(clf_bundle, feats: dict, mu_home: float, mu_away: float) -> dict:
+    """Apply the deployed combiner (see combine.py) to the three base signals."""
+    out = combine_probs(clf_bundle["combiner"], *_base_signals(clf_bundle, feats, mu_home, mu_away),
                         clf_bundle["meta_model"])[0]
-    return dict(zip(classes, out))
+    return dict(zip(clf_bundle["classes"], out))
+
+
+def method_breakdown(clf_bundle, feats: dict, mu_home: float, mu_away: float) -> dict:
+    """90-minute W/D/L probabilities from every base model and combiner."""
+    lr_p, cb_p, pois_p, context = _base_signals(clf_bundle, feats, mu_home, mu_away)
+    probs = {"logistic": lr_p, "catboost": cb_p, "poisson_wdl": pois_p}
+    for name in COMBINERS:
+        probs[name] = combine_probs(name, lr_p, cb_p, pois_p, context, clf_bundle["meta_model"])
+    keys = {"H": "home_win", "D": "draw", "A": "away_win"}
+    return {name: {keys[c]: round(float(p[0][j]), 4) for j, c in enumerate(clf_bundle["classes"])}
+            for name, p in probs.items()}
+
+
+def rating_history(feat_df: pd.DataFrame, team: str) -> pd.DataFrame:
+    """Pre-match Elo / Glicko-2 rating and RD of `team` at each of its matches."""
+    rows = []
+    for side in ("home", "away"):
+        m = feat_df[feat_df[f"{side}_team"] == team]
+        rows.append(pd.DataFrame({
+            "date": m["date"], "team": team, "elo": m[f"{side}_elo"],
+            "glicko": m[f"{side}_glicko"], "glicko_rd": m[f"{side}_glicko_rd"],
+        }))
+    return pd.concat(rows).sort_values("date")
 
 
 def classifier_title_prob(clf_bundle, feats: dict, elo_diff_raw: float,
@@ -136,7 +168,7 @@ def main():
     results = load_results()
 
     home, away = FINAL["home"], FINAL["away"]
-    _, elo, glicko, form = build_dataset(results, cutoff_date=CUTOFF)
+    feat_df, elo, glicko, form = build_dataset(results, cutoff_date=CUTOFF)
     goal_model = PoissonGoalModel().fit(results, cutoff_date=CUTOFF)
     clf_bundle = joblib.load(RESULTS_DIR / "classifier.joblib")
 
@@ -172,6 +204,12 @@ def main():
             "p_extra_time": round(mc["p_extra_time"], 4),
             "p_penalties": round(mc["p_penalties"], 4),
             "most_likely_scores_90min": mc["top_scores"],
+            "score_matrix_90min": {
+                "rows": f"{home} goals 0..{SCORE_GRID - 1}",
+                "cols": f"{away} goals 0..{SCORE_GRID - 1}",
+                "prob": np.round(mc["score_matrix"], 4).tolist(),
+            },
+            "method_breakdown_90min": method_breakdown(clf_bundle, feats, mu_home, mu_away),
             "final_title_probability": {home: round(title_home, 4), away: round(title_away, 4)},
             "predicted_champion": champion,
         }
@@ -192,6 +230,8 @@ def main():
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(RESULTS_DIR / "final_prediction.json", "w") as f:
         json.dump(report, f, indent=2, default=str)
+    pd.concat([rating_history(feat_df, home), rating_history(feat_df, away)]).to_csv(
+        RESULTS_DIR / "rating_history.csv", index=False, float_format="%.2f")
     print("Saved -> results/final_prediction.json")
 
 
