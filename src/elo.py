@@ -50,10 +50,11 @@ QUALIFIER_OR_NATIONS_LEAGUE_KEYWORDS = ("qualification", "Nations League")
 def match_k_factor(tournament: str) -> int:
     if tournament == "FIFA World Cup":
         return K_WORLD_CUP_FINALS
-    if any(key in tournament for key in CONTINENTAL_OR_MAJOR_KEYWORDS):
-        return K_CONTINENTAL_OR_INTERCONFEDERATION
+    # qualifiers first: "UEFA Euro qualification" also contains "UEFA Euro"
     if any(key in tournament for key in QUALIFIER_OR_NATIONS_LEAGUE_KEYWORDS):
         return K_QUALIFIERS_AND_MAJOR_CUPS
+    if any(key in tournament for key in CONTINENTAL_OR_MAJOR_KEYWORDS):
+        return K_CONTINENTAL_OR_INTERCONFEDERATION
     if tournament == "Friendly":
         return K_FRIENDLY
     return K_QUALIFIERS_AND_MAJOR_CUPS

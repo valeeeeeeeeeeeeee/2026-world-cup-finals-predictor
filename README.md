@@ -25,7 +25,8 @@ Three components, combined into a final ensemble:
    the full match history is replayed in chronological order by two
    complementary systems: Elo following the
    [World Football Elo](https://www.eloratings.net/about) rules (K-factor by
-   competition importance, goal-difference scaling, home-advantage bonus)
+   competition importance, goal-difference scaling, home-advantage bonus;
+   continental qualifiers use the qualifier weight, K = 40)
    and **Glicko-2** (Glickman), which besides the rating also estimates each
    team's **RD (rating deviation — uncertainty)** and **volatility**.
    Glicko-2 ignores goal margin and reacts differently to recent runs,
@@ -58,15 +59,15 @@ Three components, combined into a final ensemble:
    | Candidate | Competitive log-loss |
    |---|---|
    | Logistic alone | 0.8438 |
-   | CatBoost alone | 0.8433 |
+   | CatBoost alone | 0.8435 |
    | Poisson W/D/L alone | 0.8732 |
    | Fixed 0.65/0.35 blend (semifinals baseline) | 0.8427 |
-   | Average of the 3 bases | 0.8439 |
-   | **Stacking v2 (deployed)** | **0.8391** |
-   | Average of stacking + blend | 0.8401 |
+   | Average of the 3 bases | 0.8440 |
+   | **Stacking v2 (deployed)** | **0.8393** |
+   | Average of stacking + blend | 0.8402 |
 
    Naive baseline: 1.05. With the third Poisson base, the log-odds and the
-   context features, stacking now **beats the fixed blend** (0.8391 vs
+   context features, stacking now **beats the fixed blend** (0.8393 vs
    0.8427) — the previous version, a meta-model over raw probabilities of
    two correlated bases, lost to the blend. Caveat: picking the best of 4
    combiners on the holdout is mild selection; the exact margin should be
@@ -86,8 +87,8 @@ Because a final cannot end in a draw, `src/predict_final.py` turns the
 (only matches before the final):
 
 - **Knockout draw recalibration**: knockouts are level after 90' more often
-  than the all-matches classifier predicts (34.0% observed vs 25.2%), so
-  the stacking draw odds are multiplied by **1.53** (maximum likelihood),
+  than the all-matches classifier predicts (34.0% observed vs 25.1%), so
+  the stacking draw odds are multiplied by **1.54** (maximum likelihood),
   with win/loss rescaled to keep their ratio.
 - **Extra time + shootout**: a level tie goes to extra time where each side
   scores Poisson(φ · its 90' expected goals), with **φ = 0.242** fit on 105
@@ -168,25 +169,27 @@ historical knockouts is the meaningful check.
 ### Revised model (current code)
 
 What the current code on `main` outputs for the same fixture, with the
-knockout adjustments added after the final. Ratings differ by a point from
-the pre-match run because it was re-run on a later snapshot of the dataset.
+knockout adjustments added after the final. Ratings differ slightly from
+the pre-match run: it was re-run on a later snapshot of the dataset, and Elo
+now gives continental qualifiers (Euro, AFCON, Asian Cup, Gold Cup
+qualification) K = 40 instead of the K = 50 they wrongly received before.
 
 | Signal | Spain | Argentina |
 |---|---|---|
-| Elo (eve of the final) | 2309 | 2288 |
+| Elo (eve of the final) | 2305 | 2285 |
 | Glicko-2 (RD) | 1889 (67) | 1923 (71) |
 | Expected goals (Poisson) | 1.11 | 1.17 |
-| 90 minutes (stacking v2, raw) | 34.3% | 38.1% (draw 27.7%) |
-| 90 minutes (knockout-adjusted) | 29.9% | 33.2% (draw 36.9%) |
+| 90 minutes (stacking v2, raw) | 34.7% | 37.5% (draw 27.9%) |
+| 90 minutes (knockout-adjusted) | 30.1% | 32.6% (draw 37.3%) |
 | Win a tie level after 90' | 50.1% | 49.9% |
 | *Reference: Monte Carlo title* | *48.9%* | *51.1%* |
-| *Reference: previous ensemble (MC + stacking), re-run* | *48.6%* | *51.4%* |
-| **Title probability** | **48.4%** | **51.6%** |
+| *Reference: previous ensemble (MC + stacking), re-run* | *48.9%* | *51.1%* |
+| **Title probability** | **48.8%** | **51.2%** |
 
-The revision mainly changes *how* a team wins (P(extra time) 28.6% → 36.9%,
-P(penalties) 15.4% → 22.9%), not *who*: the title call is still Argentina,
-by a similar margin. Most likely 90-minute scores: 1-1 (17.1%), 0-0 (13.2%),
-0-1 (10.7%), 1-0 (10.0%).
+The revision mainly changes *how* a team wins (P(extra time) 28.6% → 37.3%,
+P(penalties) 15.4% → 23.1%), not *who*: the title call is still Argentina,
+by a similar margin. Most likely 90-minute scores: 1-1 (17.2%), 0-0 (13.3%),
+0-1 (10.5%), 1-0 (10.1%).
 
 Full breakdown in `results/final_prediction.json`.
 
@@ -194,18 +197,18 @@ Full breakdown in `results/final_prediction.json`.
 
 Competitive-holdout log-loss (train < 2019, validate ≥ 2019) and each
 method's raw 90-minute prediction for the final. The title columns apply
-the same knockout adjustment to every method (draw odds ×1.53, then a level
+the same knockout adjustment to every method (draw odds ×1.54, then a level
 tie goes 50.1% / 49.9% via extra time + shootout):
 
 | Method | Log-loss ↓ | Spain (90') | Draw | Argentina (90') | Title ESP | Title ARG |
 |---|---|---|---|---|---|---|
-| Logistic | 0.8438 | 34.3% | 31.6% | 34.1% | 50.1% | 49.9% |
-| CatBoost | 0.8433 | 30.3% | 26.2% | 43.5% | 44.2% | 55.8% |
+| Logistic | 0.8438 | 34.1% | 31.2% | 34.7% | 49.7% | 50.3% |
+| CatBoost | 0.8435 | 30.6% | 26.8% | 42.6% | 44.8% | 55.2% |
 | Poisson W/D/L | 0.8732 | 34.4% | 28.5% | 37.1% | 48.8% | 51.2% |
-| Fixed 0.65/0.35 blend | 0.8427 | 32.9% | 29.7% | 37.4% | 48.1% | 51.9% |
-| Average of the 3 bases | 0.8439 | 33.0% | 28.8% | 38.3% | 47.7% | 52.3% |
-| **Stacking v2 (deployed)** | **0.8391** | 34.3% | 27.7% | 38.1% | **48.4%** | **51.6%** |
-| Average of stacking + blend | 0.8401 | 33.6% | 28.7% | 37.7% | 48.2% | 51.8% |
+| Fixed 0.65/0.35 blend | 0.8427 | 32.9% | 29.7% | 37.5% | 48.0% | 52.0% |
+| Average of the 3 bases | 0.8440 | 33.0% | 28.8% | 38.2% | 47.8% | 52.2% |
+| **Stacking v2 (deployed)** | **0.8393** | 34.7% | 27.9% | 37.5% | **48.8%** | **51.2%** |
+| Average of stacking + blend | 0.8402 | 33.8% | 28.8% | 37.5% | 48.4% | 51.6% |
 
 ### Figures
 
@@ -216,7 +219,7 @@ Generated by `src/plots.py` from the artifacts in `results/`.
 | ![Scorelines](results/figures/score_heatmap.png) | ![Outcome by method](results/figures/outcome_by_method.png) |
 | **90-minute scoreline matrix** (Poisson shape, rescaled to the knockout-adjusted W/D/L); dashed diagonal = draw → extra time. | **Raw W/D/L by method** with the knockout-adjusted title odds. |
 | ![Calibration](results/figures/calibration.png) | ![Log-loss CI](results/figures/logloss_ci.png) |
-| **Calibration** of the deployed combiner on the competitive holdout (ECE ≈ 0.014–0.015 per class). | **Log-loss with 95% bootstrap CIs**: the absolute CIs overlap, but the *paired* difference shows stacking v2 ahead of every other candidate on the same matches (vs. stacking + blend: +0.0011, CI barely above 0). |
+| **Calibration** of the deployed combiner on the competitive holdout (ECE ≈ 0.013–0.016 per class). | **Log-loss with 95% bootstrap CIs**: the absolute CIs overlap, but the *paired* difference shows stacking v2 ahead of every other candidate on the same matches, except stacking + blend (+0.0010 [−0.0001, +0.0019], a near tie). |
 
 ![Rating history](results/figures/rating_history.png)
 
@@ -233,35 +236,37 @@ Paired bootstrap 95% CIs vs. the previously published ensemble.
 
 | Method (who advances, 327 knockouts 2004–2026) | Log-loss ↓ | Δ vs ensemble [95% CI] |
 |---|---|---|
-| Classifier (stacking v2 + shootout tilt) | 0.5956 | −0.0059 [−0.0126, +0.0007] |
-| Monte Carlo (Poisson + extra time + tilt) | 0.6112 | +0.0097 [+0.0029, +0.0165] |
-| Ensemble (previous published method) | 0.6015 | — |
-| Hybrid (stacking 90' + naive extra-time model) | 0.5951 | −0.0065 [−0.0125, −0.0003] |
-| **Knockout-adjusted stacking (deployed)** | **0.5964** | **−0.0051 [−0.0099, −0.0004]** |
-| Elo expected score only | 0.5946 | −0.0069 [−0.0224, +0.0089] |
+| Classifier (stacking v2 + shootout tilt) | 0.5964 | −0.0054 [−0.0123, +0.0013] |
+| Monte Carlo (Poisson + extra time + tilt) | 0.6113 | +0.0095 [+0.0026, +0.0165] |
+| Ensemble (previous published method) | 0.6018 | — |
+| Hybrid (stacking 90' + naive extra-time model) | 0.5958 | −0.0061 [−0.0123, +0.0004] |
+| **Knockout-adjusted stacking (deployed)** | **0.5970** | **−0.0048 [−0.0097, +0.0002]** |
+| Elo expected score only | 0.5952 | −0.0066 [−0.0220, +0.0090] |
 
 ![Knockout methods](results/figures/knockout_methods.png)
 
 | Sub-model check | Observed | Before | After adjustment |
 |---|---|---|---|
-| P(level after 90'), 326 knockouts 2004+ | 34.0% | 25.2% (log-loss 0.654) | 33.6% (log-loss 0.640) |
+| P(level after 90'), 326 knockouts 2004+ | 34.0% | 25.1% (log-loss 0.656) | 33.5% (log-loss 0.641) |
 | P(penalties \| extra time), 154 extra times 1986+ | 64.9% | 54.7% (log-loss 0.666) | 58.3% (log-loss 0.653) |
 
 ![Knockout sub-models](results/figures/knockout_submodels.png)
 
 Findings:
 
-- **The Monte Carlo dragged the ensemble down.** It is the weakest method;
-  dropping it is the source of the gain over the previous ensemble.
-- **Knockout draws were underpredicted** (34.0% level after 90' vs 25.2%);
-  the draw recalibration fixes the level (33.6%), which makes P(extra
+- **The Monte Carlo dragged the ensemble down.** It is the weakest method
+  and the only one clearly separated from the ensemble (its CI excludes 0);
+  dropping it is the source of the ~0.005 gain over the previous ensemble,
+  although that gain's CI now just touches 0.
+- **Knockout draws were underpredicted** (34.0% level after 90' vs 25.1%);
+  the draw recalibration fixes the level (33.5%), which makes P(extra
   time) and P(penalties) honest.
 - **Extra time has ~27% fewer goals per minute** than the 90 minutes
   (φ = 0.242 vs 0.333), so more ties reach penalties; still slightly
   underpredicted (58.3% vs 64.9%).
 - **The adjustment does not sharpen "who advances"**: deployed vs. the
-  unadjusted hybrid is +0.0012 [−0.0013, +0.0036], i.e. a tie. Once level
-  after 90' a tie is close to a coin flip (Elo tilt 0.677, extra-time model
+  unadjusted hybrid is +0.0013 [−0.0016, +0.0040], i.e. a tie. Once level
+  after 90' a tie is close to a coin flip (Elo tilt 0.678, extra-time model
   0.676, 50/50 0.693), so moving mass into the draw mostly changes *how*
   a team advances, not *who*. It is deployed for the calibrated
   extra-time/penalty probabilities at no cost in title accuracy.

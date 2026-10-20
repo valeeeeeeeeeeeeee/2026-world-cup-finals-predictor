@@ -19,9 +19,6 @@ def test_k_factor(tournament, k):
     assert match_k_factor(tournament) == k
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "continental qualifiers hit the 'UEFA Euro'/'Gold Cup'/... keywords "
-    "before the 'qualification' one and get K=50 instead of 40"))
 @pytest.mark.parametrize("tournament", [
     "UEFA Euro qualification",
     "African Cup of Nations qualification",
