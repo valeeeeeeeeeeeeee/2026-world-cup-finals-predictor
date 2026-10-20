@@ -21,8 +21,9 @@ written by backtest_knockouts.py (fit only on knockouts played before the
 final). That backtest is also why the Monte Carlo is no longer averaged
 into the headline number: it scored worse than the classifier on 327
 historical knockouts. The simulation (50,000 runs, same extra-time factor)
-is kept for the scoreline matrix — rescaled so its win/draw/loss regions
-match step 2 — and its own title estimate is reported for reference.
+is kept only as a reference title estimate. The scoreline matrix is the
+exact Poisson score distribution (no sampling noise), rescaled so its
+win/draw/loss regions match step 2.
 """
 from __future__ import annotations
 
@@ -36,7 +37,7 @@ from combine import CLASSES, COMBINERS, combine_probs, poisson_wdl
 from data_io import load_results, RESULTS_DIR
 from features import build_dataset, fixture_features
 from knockout import NAIVE_ET_FACTOR, advance_given_level, recalibrate_draw, title_prob
-from poisson_model import PoissonGoalModel
+from train_model import _fit_poisson
 
 CUTOFF = "2026-07-19"
 N_SIMS = 50_000
@@ -87,17 +88,6 @@ def simulate_match(mu_home, mu_away, elo_diff_raw, n_sims=N_SIMS,
     else:
         p_penalties = 0.0
 
-    # Most likely 90-minute scorelines from the same simulated draws.
-    scores = pd.Series(zip(home_reg.tolist(), away_reg.tolist())).value_counts(normalize=True)
-    top_scores = [
-        {"score": f"{h} x {a}", "prob": round(float(p), 4)}
-        for (h, a), p in scores.head(5).items()
-    ]
-
-    score_matrix = np.zeros((SCORE_GRID, SCORE_GRID))
-    in_grid = (home_reg < SCORE_GRID) & (away_reg < SCORE_GRID)
-    np.add.at(score_matrix, (home_reg[in_grid], away_reg[in_grid]), 1.0 / n_sims)
-
     return {
         "mu_home": mu_home,
         "mu_away": mu_away,
@@ -107,12 +97,10 @@ def simulate_match(mu_home, mu_away, elo_diff_raw, n_sims=N_SIMS,
         "p_away_title": float(away_wins.mean()),
         "p_extra_time": p_extra_time,
         "p_penalties": p_penalties,
-        "top_scores": top_scores,
-        "score_matrix": score_matrix,
     }
 
 
-def _base_signals(clf_bundle, feats: dict, mu_home: float, mu_away: float):
+def _base_signals(clf_bundle, feats: dict, mu_home: float, mu_away: float, rho: float = 0.0):
     """The three aligned base signals (logistic, CatBoost, Poisson W/D/L) and
     the match context the meta-model expects."""
     classes = clf_bundle["classes"]
@@ -124,21 +112,24 @@ def _base_signals(clf_bundle, feats: dict, mu_home: float, mu_away: float):
 
     lr_p = aligned(clf_bundle["members"]["logistic"])
     cb_p = aligned(clf_bundle["members"]["catboost"])
-    pois_p = poisson_wdl(mu_home, mu_away)
+    pois_p = poisson_wdl(mu_home, mu_away, rho=rho)
     context = np.array([[feats["neutral"], feats["k_weight"]]], dtype=float)
     return lr_p, cb_p, pois_p, context
 
 
-def ensemble_class_probs(clf_bundle, feats: dict, mu_home: float, mu_away: float) -> dict:
+def ensemble_class_probs(clf_bundle, feats: dict, mu_home: float, mu_away: float,
+                         rho: float = 0.0) -> dict:
     """Apply the deployed combiner (see combine.py) to the three base signals."""
-    out = combine_probs(clf_bundle["combiner"], *_base_signals(clf_bundle, feats, mu_home, mu_away),
+    out = combine_probs(clf_bundle["combiner"],
+                        *_base_signals(clf_bundle, feats, mu_home, mu_away, rho),
                         clf_bundle["meta_model"])[0]
     return dict(zip(clf_bundle["classes"], out))
 
 
-def method_breakdown(clf_bundle, feats: dict, mu_home: float, mu_away: float) -> dict:
+def method_breakdown(clf_bundle, feats: dict, mu_home: float, mu_away: float,
+                     rho: float = 0.0) -> dict:
     """90-minute W/D/L probabilities from every base model and combiner."""
-    lr_p, cb_p, pois_p, context = _base_signals(clf_bundle, feats, mu_home, mu_away)
+    lr_p, cb_p, pois_p, context = _base_signals(clf_bundle, feats, mu_home, mu_away, rho)
     probs = {"logistic": lr_p, "catboost": cb_p, "poisson_wdl": pois_p}
     for name in COMBINERS:
         probs[name] = combine_probs(name, lr_p, cb_p, pois_p, context, clf_bundle["meta_model"])
@@ -168,9 +159,9 @@ def load_knockout_calibration() -> dict:
 
 
 def knockout_title_prob(clf_bundle, feats: dict, elo_diff_raw: float,
-                        mu_home: float, mu_away: float, calib: dict) -> dict:
+                        mu_home: float, mu_away: float, calib: dict, rho: float = 0.0) -> dict:
     """Steps 1-3 of the module docstring for one knockout fixture."""
-    class_probs = ensemble_class_probs(clf_bundle, feats, mu_home, mu_away)
+    class_probs = ensemble_class_probs(clf_bundle, feats, mu_home, mu_away, rho)
     raw = np.array([[class_probs[c] for c in CLASSES]])
     adj = recalibrate_draw(raw, calib["draw_odds_factor"])
     p_shoot = shootout_win_prob(elo_diff_raw)
@@ -205,7 +196,8 @@ def main():
 
     home, away = FINAL["home"], FINAL["away"]
     feat_df, elo, glicko, form = build_dataset(results, cutoff_date=CUTOFF)
-    goal_model = PoissonGoalModel().fit(results, cutoff_date=CUTOFF)
+    # same rolling window as the Poisson base the meta-model was trained on
+    goal_model = _fit_poisson(results, pd.Timestamp(CUTOFF))
     clf_bundle = joblib.load(RESULTS_DIR / "classifier.joblib")
 
     feats = fixture_features(elo, glicko, form, home, away, neutral=True, match_date=FINAL["date"])
@@ -214,9 +206,12 @@ def main():
     mu_away = goal_model.expected_goals(away, home, neutral=True)
 
     calib = load_knockout_calibration()
-    ko = knockout_title_prob(clf_bundle, feats, elo_diff_raw, mu_home, mu_away, calib)
+    ko = knockout_title_prob(clf_bundle, feats, elo_diff_raw, mu_home, mu_away, calib,
+                             goal_model.rho)
     mc = simulate_match(mu_home, mu_away, elo_diff_raw, et_goal_factor=calib["et_goal_factor"])
-    score_matrix = rescale_score_matrix(mc["score_matrix"], mc["p_90"], ko["adj_90"])
+    p_90 = dict(zip(CLASSES, goal_model.wdl(mu_home, mu_away)[0]))
+    score_matrix = rescale_score_matrix(goal_model.score_matrix(mu_home, mu_away, SCORE_GRID),
+                                        p_90, ko["adj_90"])
     top = sorted(((score_matrix[h, a], h, a) for h in range(SCORE_GRID) for a in range(SCORE_GRID)),
                  reverse=True)[:5]
     top_scores = [{"score": f"{h} x {a}", "prob": round(float(p), 4)} for p, h, a in top]
@@ -257,7 +252,8 @@ def main():
                 "cols": f"{away} goals 0..{SCORE_GRID - 1}",
                 "prob": np.round(score_matrix, 4).tolist(),
             },
-            "method_breakdown_90min": method_breakdown(clf_bundle, feats, mu_home, mu_away),
+            "method_breakdown_90min": method_breakdown(clf_bundle, feats, mu_home, mu_away,
+                                                       goal_model.rho),
             "reference_title_prob": {
                 "monte_carlo": {home: round(mc["p_home_title"], 4), away: round(mc["p_away_title"], 4)},
                 "classifier_unadjusted": {home: round(ko["p_home_title_unadjusted"], 4),

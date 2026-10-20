@@ -31,32 +31,43 @@ HOME_ADVANTAGE = 100.0  # Elo points added to the home team's expected-score cal
 K_WORLD_CUP_FINALS = 60
 K_CONTINENTAL_OR_INTERCONFEDERATION = 50
 K_QUALIFIERS_AND_MAJOR_CUPS = 40
+K_OTHER_TOURNAMENTS = 30
 K_FRIENDLY = 20
 
-CONTINENTAL_OR_MAJOR_KEYWORDS = (
+# Exact names: substring matching would also catch e.g. "Australia
+# Bicentenary Gold Cup" or "Bangladesh President's Gold Cup".
+CONTINENTAL_OR_INTERCONFEDERATION = {
     "Copa América",
     "African Cup of Nations",
     "AFC Asian Cup",
     "UEFA Euro",
     "Gold Cup",
     "CONCACAF Championship",
-    "Confederations Cup",
     "Oceania Nations Cup",
-    "Copa America",
-)
-QUALIFIER_OR_NATIONS_LEAGUE_KEYWORDS = ("qualification", "Nations League")
+    "Confederations Cup",
+    "CONMEBOL–UEFA Cup of Champions",
+}
+MAJOR_TOURNAMENTS = {"UEFA Nations League", "CONCACAF Nations League"}
+QUALIFICATION_SUFFIX = " qualification"
 
 
 def match_k_factor(tournament: str) -> int:
+    """60 World Cup finals; 50 continental finals and major intercontinental
+    tournaments; 40 World Cup and continental qualifiers and the Nations
+    Leagues; 30 all other tournaments (regional cups, invitationals and
+    their qualifiers); 20 friendlies."""
     if tournament == "FIFA World Cup":
         return K_WORLD_CUP_FINALS
-    if any(key in tournament for key in CONTINENTAL_OR_MAJOR_KEYWORDS):
+    if tournament in CONTINENTAL_OR_INTERCONFEDERATION:
         return K_CONTINENTAL_OR_INTERCONFEDERATION
-    if any(key in tournament for key in QUALIFIER_OR_NATIONS_LEAGUE_KEYWORDS):
+    base = tournament.removesuffix(QUALIFICATION_SUFFIX)
+    if base != tournament and (base == "FIFA World Cup" or base in CONTINENTAL_OR_INTERCONFEDERATION):
+        return K_QUALIFIERS_AND_MAJOR_CUPS
+    if base in MAJOR_TOURNAMENTS:
         return K_QUALIFIERS_AND_MAJOR_CUPS
     if tournament == "Friendly":
         return K_FRIENDLY
-    return K_QUALIFIERS_AND_MAJOR_CUPS
+    return K_OTHER_TOURNAMENTS
 
 
 def goal_diff_multiplier(goal_diff: int) -> float:

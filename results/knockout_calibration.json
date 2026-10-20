@@ -1,7 +1,7 @@
 {
-  "draw_odds_factor": 1.5296190447911007,
+  "draw_odds_factor": 1.5458751492317047,
   "n_knockouts_draw_fit": 325,
-  "et_goal_factor": 0.24212913245876092,
+  "et_goal_factor": 0.24305381668944567,
   "n_extra_times_goal_fit": 105,
   "naive_et_goal_factor": 0.3333333333333333,
   "fit_on": "knockouts before 2026-07-19 (draw: 2004+, extra-time goals: 2005+)"

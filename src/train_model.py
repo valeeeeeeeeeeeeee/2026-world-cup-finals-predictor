@@ -9,8 +9,9 @@ Base models (all leak-free, recency-weighted where applicable):
      (Elo diff/level, Glicko-2 diff and RD gap, 10-match form, rest days,
      competition importance, neutral venue).
   b. **CatBoost** gradient boosting on the same features.
-  c. **Dixon-Coles Poisson** W/D/L probabilities, derived from each side's
-     expected goals (attack/defense strengths on a rolling ~11-year window)
+  c. **Poisson** W/D/L probabilities, derived from each side's expected
+     goals (attack/defense strengths, recency-weighted with a 4-year
+     half-life over a rolling 20-year window)
      via the full score matrix. This base is only weakly correlated with
      the two rating-driven classifiers — the diversity a combiner needs.
 
@@ -44,7 +45,7 @@ from sklearn.metrics import accuracy_score, log_loss
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-from combine import CLASSES, COMBINERS, combine_probs, meta_matrix, poisson_wdl
+from combine import CLASSES, COMBINERS, combine_probs, meta_matrix
 from data_io import load_results, RESULTS_DIR
 from features import build_dataset, FEATURE_COLS
 from poisson_model import PoissonGoalModel
@@ -56,7 +57,7 @@ CUTOFF = pd.Timestamp("2026-07-19")  # eve of the final: semifinals included
 
 META_BLOCKS_START = pd.Timestamp("2000-01-01")  # ~128 years of history before the 1st block
 META_BLOCK_YEARS = 2
-POISSON_WINDOW_YEARS = 11  # rolling window length for historical Poisson fits
+POISSON_WINDOW_YEARS = 20  # rolling window for Poisson fits (recency-weighted, see poisson_model)
 
 
 def recency_weights(dates: pd.Series, reference: pd.Timestamp) -> np.ndarray:
@@ -101,7 +102,7 @@ def _poisson_probs(goal_model: PoissonGoalModel, df: pd.DataFrame) -> np.ndarray
     mu_home = goal_model.expected_goals_batch(df["home_team"], df["away_team"], is_home)
     mu_away = goal_model.expected_goals_batch(df["away_team"], df["home_team"],
                                               np.zeros(len(df)))
-    return poisson_wdl(mu_home, mu_away)
+    return goal_model.wdl(mu_home, mu_away)
 
 
 def _fit_poisson(results: pd.DataFrame, cutoff: pd.Timestamp) -> PoissonGoalModel:
