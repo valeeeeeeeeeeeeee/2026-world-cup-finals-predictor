@@ -6,7 +6,18 @@ Machine Learning model predicting the result of the 2026 FIFA World Cup final
 [martj42/international_results](https://github.com/martj42/international_results)
 dataset.
 
-## Methodology
+| | |
+|---|---|
+| **Pre-match forecast** (frozen 2026-07-16, tag [`v1.0-pre-final`](https://github.com/valeeeeeeeeeeeeee/2026-world-cup-finals-predictor/tree/v1.0-pre-final)) | Argentina champion, **51.1%** vs Spain 48.9% |
+| **Actual result** (2026-07-19) | **Spain 1-0 Argentina** after extra time |
+
+The forecast made before kickoff is kept separate from everything built
+after the final: see [Pre-match forecast](#pre-match-forecast) and
+[Post-match analysis](#post-match-analysis). The code on `main` is the
+**revised** model; `git checkout v1.0-pre-final` restores the exact code and
+outputs that produced the original forecast.
+
+## Methodology (current, revised model)
 
 Three components, combined into a final ensemble:
 
@@ -64,6 +75,11 @@ Three components, combined into a final ensemble:
    attack/defense strengths via L2-regularized Poisson regression
    (matches since 2015).
 
+> **Added after the final.** The knockout adjustments below were developed
+> once the result was known. The pre-match forecast instead averaged the
+> stacking classifier with the Poisson Monte Carlo and had no draw
+> recalibration.
+
 Because a final cannot end in a draw, `src/predict_final.py` turns the
 90-minute forecast into a title probability with two knockout adjustments
 (`src/knockout.py`), both fit on historical knockouts by the backtest below
@@ -84,7 +100,76 @@ Monte Carlo (50,000 runs, same φ) is no longer averaged in — it was the
 weakest method in the backtest — and is kept for the scoreline matrix
 (rescaled to the adjusted W/D/L) and as a reference number.
 
-## Result — Spain vs Argentina
+## Pre-match forecast
+
+Frozen at tag [`v1.0-pre-final`](https://github.com/valeeeeeeeeeeeeee/2026-world-cup-finals-predictor/tree/v1.0-pre-final)
+(commit `7e18df4`, 2026-07-16, three days before the final). These are the
+numbers published before kickoff, unchanged; the method at that point was
+stacking v2 for the 90 minutes, averaged with the Poisson Monte Carlo for
+the title, with draws resolved by an Elo-tilted shootout.
+
+| Signal | Spain | Argentina |
+|---|---|---|
+| Elo (eve of the final) | 2308 | 2287 |
+| Glicko-2 (RD) | 1889 (67) | 1923 (71) |
+| Expected goals (Poisson) | 1.12 | 1.17 |
+| 90 minutes (stacking v2) | 34.8% | 37.5% (draw 27.7%) |
+| Title — Monte Carlo | 48.8% | 51.2% |
+| Title — classifier | 48.9% | 51.1% |
+| **Title — final ensemble** | **48.9%** | **51.1%** |
+
+**Predicted champion: Argentina, by a narrow margin.** Elo and Glicko-2
+disagreed about who was stronger (Elo gave Spain +21; Glicko-2, which ignores
+goal margin and reacts faster to recent runs, gave Argentina +34); the
+Poisson model saw a slight Argentine edge in attack. The meta-model, seeing
+all three signals, leaned toward Argentina.
+P(extra time) = 28.6%, P(penalties) = 15.4%.
+Most likely 90-minute scores: 1-1 (13.3%), 0-1 (11.9%), 1-0 (11.4%).
+
+Per-method view at the time (competitive-holdout log-loss, train < 2019,
+validate ≥ 2019; title columns resolve the draw via the Elo-tilted
+shootout):
+
+| Method | Log-loss ↓ | Spain (90') | Draw | Argentina (90') | Title ESP | Title ARG |
+|---|---|---|---|---|---|---|
+| Logistic | 0.8438 | 34.4% | 31.8% | 33.8% | 50.6% | 49.4% |
+| CatBoost | 0.8439 | 28.8% | 29.9% | 41.2% | 44.1% | 55.9% |
+| Poisson W/D/L | 0.8728 | 34.5% | 28.5% | 37.1% | 49.0% | 51.0% |
+| Fixed 0.65/0.35 blend | 0.8428 | 32.4% | 31.1% | 36.4% | 48.3% | 51.7% |
+| Average of the 3 bases | 0.8440 | 32.6% | 30.1% | 37.4% | 47.9% | 52.1% |
+| **Stacking v2 (deployed)** | **0.8391** | 34.8% | 27.7% | 37.5% | 48.9% | 51.1% |
+| Average of stacking + blend | 0.8402 | 33.6% | 29.4% | 37.0% | 48.6% | 51.4% |
+| Monte Carlo (Poisson simulation) | — | — | — | — | 48.8% | 51.2% |
+| **Final ensemble (MC + stacking)** | — | — | — | — | **48.9%** | **51.1%** |
+
+The full pre-match output is `results/final_prediction.json` at that tag
+(`git show v1.0-pre-final:results/final_prediction.json`).
+
+## Post-match analysis
+
+Everything from here on was done **after** the final, with the result
+known. It evaluates the pre-match forecast and documents a revised model;
+the revision is not a forecast and should not be read as one.
+
+### What happened
+
+Spain won 1-0 after extra time (0-0 at 90', Ferran Torres 106').
+
+| Pre-match claim | Outcome | Comment |
+|---|---|---|
+| Argentina champion, 51.1% | Spain won | A near coin flip that went the other way. Log-loss on this one match: 0.716 vs 0.693 for a 50/50 call. |
+| P(extra time) = 28.6% | Extra time happened | Plausible, but the knockout backtest below shows level-after-90' was systematically underpredicted. |
+| P(penalties) = 15.4% | No penalties | — |
+
+A single match cannot validate or refute a probabilistic model; the
+[knockout backtest](#knockout-backtest-srcbacktest_knockoutspy) over 327
+historical knockouts is the meaningful check.
+
+### Revised model (current code)
+
+What the current code on `main` outputs for the same fixture, with the
+knockout adjustments added after the final. Ratings differ by a point from
+the pre-match run because it was re-run on a later snapshot of the dataset.
 
 | Signal | Spain | Argentina |
 |---|---|---|
@@ -95,24 +180,17 @@ weakest method in the backtest — and is kept for the scoreline matrix
 | 90 minutes (knockout-adjusted) | 29.9% | 33.2% (draw 36.9%) |
 | Win a tie level after 90' | 50.1% | 49.9% |
 | *Reference: Monte Carlo title* | *48.9%* | *51.1%* |
-| *Reference: previous ensemble (MC + stacking)* | *48.6%* | *51.4%* |
+| *Reference: previous ensemble (MC + stacking), re-run* | *48.6%* | *51.4%* |
 | **Title probability** | **48.4%** | **51.6%** |
 
-**Predicted champion: Argentina, by a narrow margin.** Elo and Glicko-2
-disagree about who is stronger (Elo gives Spain +21; Glicko-2, which ignores
-goal margin and reacts faster to recent runs, gives Argentina +33); the
-Poisson model sees a slight Argentine edge in attack. The meta-model, seeing
-all three signals, leans toward Argentina.
-P(extra time) = 36.9%, P(penalties) = 22.9%.
-Most likely 90-minute scores: 1-1 (17.1%), 0-0 (13.2%), 0-1 (10.7%), 1-0 (10.0%).
-
-**What happened:** Spain won 1-0 after extra time (0-0 at 90', Ferran
-Torres 106'). The model's call was a near coin flip that went the other way;
-the extra-time scenario it now rates at 36.9% is the one that occurred.
+The revision mainly changes *how* a team wins (P(extra time) 28.6% → 36.9%,
+P(penalties) 15.4% → 22.9%), not *who*: the title call is still Argentina,
+by a similar margin. Most likely 90-minute scores: 1-1 (17.1%), 0-0 (13.2%),
+0-1 (10.7%), 1-0 (10.0%).
 
 Full breakdown in `results/final_prediction.json`.
 
-## Method comparison
+### Method comparison (revised model)
 
 Competitive-holdout log-loss (train < 2019, validate ≥ 2019) and each
 method's raw 90-minute prediction for the final. The title columns apply
@@ -129,7 +207,7 @@ tie goes 50.1% / 49.9% via extra time + shootout):
 | **Stacking v2 (deployed)** | **0.8391** | 34.3% | 27.7% | 38.1% | **48.4%** | **51.6%** |
 | Average of stacking + blend | 0.8401 | 33.6% | 28.7% | 37.7% | 48.2% | 51.8% |
 
-## Figures
+### Figures
 
 Generated by `src/plots.py` from the artifacts in `results/`.
 
@@ -144,7 +222,7 @@ Generated by `src/plots.py` from the artifacts in `results/`.
 
 **Elo and Glicko-2 since 2018**, with the ±2 RD uncertainty band. The two systems disagree on the eve of the final.
 
-## Knockout backtest (`src/backtest_knockouts.py`)
+### Knockout backtest (`src/backtest_knockouts.py`)
 
 The W/D/L holdout cannot validate how a draw is turned into a winner, so
 the title methods are replayed on real knockout matches (World Cup, Euro,
@@ -196,6 +274,10 @@ Full output: `results/knockout_backtest.json`, the row-level
 
 ## Running it
 
+Requires Python 3.13 (see `.python-version`); `requirements.txt` pins the
+exact library versions `results/classifier.joblib` was saved with, and the
+pickle may not load under other scikit-learn/CatBoost versions.
+
 ```bash
 pip install -r requirements.txt
 cd src
@@ -206,9 +288,21 @@ python plots.py               # renders the figures to results/figures/
 ```
 
 `results.csv`, `shootouts.csv` and `goalscorers.csv` are downloaded
-automatically on first run (results already include the semifinals: Spain
+automatically on first run from a pinned commit of the data repository
+(`DATA_COMMIT` in `src/data_io.py`) and checked against SHA-256 hashes, so
+re-runs see exactly the same data (results already include the semifinals: Spain
 2-0 France, Argentina 2-1 England; the cutoff keeps the final itself out of
 every fit).
+
+To inspect or re-run the original pre-match forecast:
+
+```bash
+git checkout v1.0-pre-final
+```
+
+Re-running it today downloads a newer snapshot of the dataset, so ratings
+can shift slightly; the committed `results/` at that tag are the published
+numbers.
 
 ## Project layout
 
