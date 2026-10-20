@@ -1,0 +1,394 @@
+{
+  "editions_full_model": [
+    "AFC Asian Cup 2019",
+    "AFC Asian Cup 2024",
+    "African Cup of Nations 2004",
+    "African Cup of Nations 2006",
+    "African Cup of Nations 2008",
+    "African Cup of Nations 2012",
+    "African Cup of Nations 2013",
+    "African Cup of Nations 2015",
+    "African Cup of Nations 2017",
+    "African Cup of Nations 2019",
+    "African Cup of Nations 2022",
+    "African Cup of Nations 2024",
+    "African Cup of Nations 2025",
+    "FIFA World Cup 2006",
+    "FIFA World Cup 2010",
+    "FIFA World Cup 2014",
+    "FIFA World Cup 2018",
+    "FIFA World Cup 2022",
+    "FIFA World Cup 2026",
+    "UEFA Euro 2004",
+    "UEFA Euro 2008",
+    "UEFA Euro 2012",
+    "UEFA Euro 2016",
+    "UEFA Euro 2021",
+    "UEFA Euro 2024"
+  ],
+  "editions_et_tests": [
+    "AFC Asian Cup 2019",
+    "AFC Asian Cup 2024",
+    "African Cup of Nations 1998",
+    "African Cup of Nations 2000",
+    "African Cup of Nations 2002",
+    "African Cup of Nations 2004",
+    "African Cup of Nations 2006",
+    "African Cup of Nations 2008",
+    "African Cup of Nations 2012",
+    "African Cup of Nations 2013",
+    "African Cup of Nations 2015",
+    "African Cup of Nations 2017",
+    "African Cup of Nations 2019",
+    "African Cup of Nations 2022",
+    "African Cup of Nations 2024",
+    "African Cup of Nations 2025",
+    "FIFA World Cup 1986",
+    "FIFA World Cup 1990",
+    "FIFA World Cup 1994",
+    "FIFA World Cup 1998",
+    "FIFA World Cup 2002",
+    "FIFA World Cup 2006",
+    "FIFA World Cup 2010",
+    "FIFA World Cup 2014",
+    "FIFA World Cup 2018",
+    "FIFA World Cup 2022",
+    "FIFA World Cup 2026",
+    "UEFA Euro 1996",
+    "UEFA Euro 2000",
+    "UEFA Euro 2004",
+    "UEFA Euro 2008",
+    "UEFA Euro 2012",
+    "UEFA Euro 2016",
+    "UEFA Euro 2021",
+    "UEFA Euro 2024"
+  ],
+  "editions_skipped_unknown_format": [
+    "FIFA World Cup 1930",
+    "FIFA World Cup 1934",
+    "FIFA World Cup 1938",
+    "FIFA World Cup 1950",
+    "FIFA World Cup 1954",
+    "FIFA World Cup 1958",
+    "FIFA World Cup 1962",
+    "FIFA World Cup 1966",
+    "FIFA World Cup 1970",
+    "FIFA World Cup 1974",
+    "FIFA World Cup 1978",
+    "UEFA Euro 1960",
+    "UEFA Euro 1964",
+    "UEFA Euro 1968",
+    "UEFA Euro 1972",
+    "UEFA Euro 1976",
+    "UEFA Euro 1980",
+    "UEFA Euro 1984",
+    "UEFA Euro 1988",
+    "UEFA Euro 1992",
+    "African Cup of Nations 1957",
+    "African Cup of Nations 1959",
+    "African Cup of Nations 1962",
+    "African Cup of Nations 1963",
+    "African Cup of Nations 1965",
+    "African Cup of Nations 1968",
+    "African Cup of Nations 1970",
+    "African Cup of Nations 1972",
+    "African Cup of Nations 1974",
+    "African Cup of Nations 1976",
+    "African Cup of Nations 1978",
+    "African Cup of Nations 1980",
+    "African Cup of Nations 1982",
+    "African Cup of Nations 1984",
+    "African Cup of Nations 1986",
+    "African Cup of Nations 1988",
+    "African Cup of Nations 1990",
+    "African Cup of Nations 1992",
+    "African Cup of Nations 1994",
+    "African Cup of Nations 1996",
+    "African Cup of Nations 2010",
+    "AFC Asian Cup 1956",
+    "AFC Asian Cup 1960",
+    "AFC Asian Cup 1964",
+    "AFC Asian Cup 1968",
+    "AFC Asian Cup 1972",
+    "AFC Asian Cup 1976",
+    "AFC Asian Cup 1980",
+    "AFC Asian Cup 1984",
+    "AFC Asian Cup 1988",
+    "AFC Asian Cup 1992",
+    "AFC Asian Cup 1996",
+    "AFC Asian Cup 2000",
+    "AFC Asian Cup 2004",
+    "AFC Asian Cup 2007",
+    "AFC Asian Cup 2011",
+    "AFC Asian Cup 2015"
+  ],
+  "advance_all_knockouts": {
+    "n": 327,
+    "observed_rate": 0.5932721712538226,
+    "methods": {
+      "classifier": {
+        "log_loss": 0.5956155793768144,
+        "brier": 0.20555791562595133,
+        "accuracy": 0.6819571865443425,
+        "mean_pred": 0.5565569444111423,
+        "diff_vs_ensemble": -0.005919604833112607,
+        "diff_ci95": [
+          -0.012553361018046648,
+          0.0006600626229666757
+        ]
+      },
+      "monte_carlo": {
+        "log_loss": 0.6112297573624774,
+        "brier": 0.21167224192782874,
+        "accuracy": 0.6819571865443425,
+        "mean_pred": 0.5578581039755351,
+        "diff_vs_ensemble": 0.009694573152550241,
+        "diff_ci95": [
+          0.002948284457683315,
+          0.016465380295484524
+        ]
+      },
+      "ensemble": {
+        "log_loss": 0.6015351842099271,
+        "brier": 0.20775538661544662,
+        "accuracy": 0.6819571865443425,
+        "mean_pred": 0.5572075241933387,
+        "diff_vs_ensemble": 0.0,
+        "diff_ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "hybrid": {
+        "log_loss": 0.5950609599684449,
+        "brier": 0.205435137086263,
+        "accuracy": 0.6788990825688074,
+        "mean_pred": 0.5599913952944592,
+        "diff_vs_ensemble": -0.006474224241482268,
+        "diff_ci95": [
+          -0.012539843304029854,
+          -0.00030005014661590307
+        ]
+      },
+      "calibrated": {
+        "log_loss": 0.5964337825926277,
+        "brier": 0.2057951111207528,
+        "accuracy": 0.6819571865443425,
+        "mean_pred": 0.5572722424576111,
+        "diff_vs_ensemble": -0.0051014016172993655,
+        "diff_ci95": [
+          -0.009917612451488839,
+          -0.0003999453433736873
+        ]
+      },
+      "elo_only": {
+        "log_loss": 0.5946388326245398,
+        "brier": 0.2056174567571102,
+        "accuracy": 0.7003058103975535,
+        "mean_pred": 0.5744089431111163,
+        "diff_vs_ensemble": -0.006896351585387338,
+        "diff_ci95": [
+          -0.022444691587699715,
+          0.008862374833096136
+        ]
+      }
+    }
+  },
+  "advance_et_matches_full_model": {
+    "n": 111,
+    "observed_rate": 0.5585585585585585,
+    "methods": {
+      "classifier": {
+        "log_loss": 0.6700789468477137,
+        "brier": 0.23884659633837566,
+        "accuracy": 0.6036036036036037,
+        "mean_pred": 0.536105239741065,
+        "diff_vs_ensemble": -0.007989350580470966,
+        "diff_ci95": [
+          -0.017850640444086224,
+          0.0016688284740550472
+        ]
+      },
+      "monte_carlo": {
+        "log_loss": 0.689012865241747,
+        "brier": 0.24822255587027028,
+        "accuracy": 0.5405405405405406,
+        "mean_pred": 0.5418450450450452,
+        "diff_vs_ensemble": 0.010944567813562204,
+        "diff_ci95": [
+          0.001068732926751167,
+          0.021172161056540136
+        ]
+      },
+      "ensemble": {
+        "log_loss": 0.6780682974281848,
+        "brier": 0.24280682135407744,
+        "accuracy": 0.5765765765765766,
+        "mean_pred": 0.5389751423930551,
+        "diff_vs_ensemble": 0.0,
+        "diff_ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "hybrid": {
+        "log_loss": 0.6743197966024055,
+        "brier": 0.24068001768437486,
+        "accuracy": 0.6036036036036037,
+        "mean_pred": 0.5392122547335313,
+        "diff_vs_ensemble": -0.0037485008257794293,
+        "diff_ci95": [
+          -0.013524940028973486,
+          0.005977766302973282
+        ]
+      },
+      "calibrated": {
+        "log_loss": 0.6714982147186632,
+        "brier": 0.23960314444330924,
+        "accuracy": 0.6036036036036037,
+        "mean_pred": 0.5374105360230574,
+        "diff_vs_ensemble": -0.006570082709521724,
+        "diff_ci95": [
+          -0.013786282846861554,
+          0.0006667471570899264
+        ]
+      },
+      "elo_only": {
+        "log_loss": 0.6773543522583368,
+        "brier": 0.24240945824930876,
+        "accuracy": 0.6216216216216216,
+        "mean_pred": 0.5560848101738066,
+        "diff_vs_ensemble": -0.0007139451698480882,
+        "diff_ci95": [
+          -0.027049542158760532,
+          0.025518475579267508
+        ]
+      }
+    }
+  },
+  "level_after_90": {
+    "n": 326,
+    "observed_rate": 0.34049079754601225,
+    "methods": {
+      "p_level90_stacking": {
+        "log_loss": 0.6540772256804185,
+        "brier": 0.22937569065046773,
+        "accuracy": 0.6595092024539877,
+        "mean_pred": 0.25170198132014593,
+        "diff_vs_p_level90_stacking": 0.0,
+        "diff_ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "p_level90_poisson": {
+        "log_loss": 0.6489887786319573,
+        "brier": 0.2276335100887956,
+        "accuracy": 0.6595092024539877,
+        "mean_pred": 0.27222830454111574,
+        "diff_vs_p_level90_stacking": -0.005088447048461177,
+        "diff_ci95": [
+          -0.014858491334475551,
+          0.004284232208747905
+        ]
+      },
+      "p_level90_calibrated": {
+        "log_loss": 0.6402300387269212,
+        "brier": 0.22405722029735142,
+        "accuracy": 0.6595092024539877,
+        "mean_pred": 0.33569034460615543,
+        "diff_vs_p_level90_stacking": -0.013847186953497289,
+        "diff_ci95": [
+          -0.03609890021713549,
+          0.007788565034427532
+        ]
+      }
+    }
+  },
+  "advance_given_extra_time": {
+    "n": 154,
+    "observed_rate": 0.5324675324675324,
+    "methods": {
+      "cond_tilt": {
+        "log_loss": 0.6769834573829849,
+        "brier": 0.24206260388438236,
+        "accuracy": 0.6038961038961039,
+        "mean_pred": 0.5103234769651157,
+        "diff_vs_cond_mc": 0.0010223489086527069,
+        "diff_ci95": [
+          -0.013795333240320496,
+          0.015843513221707427
+        ]
+      },
+      "cond_mc": {
+        "log_loss": 0.6759611084743324,
+        "brier": 0.24182494575525532,
+        "accuracy": 0.564935064935065,
+        "mean_pred": 0.5233972923394685,
+        "diff_vs_cond_mc": 0.0,
+        "diff_ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "cond_calibrated": {
+        "log_loss": 0.675989101964186,
+        "brier": 0.24178862753323307,
+        "accuracy": 0.5714285714285714,
+        "mean_pred": 0.5220276167759041,
+        "diff_vs_cond_mc": 2.7993489853793316e-05,
+        "diff_ci95": [
+          -0.002270853134133896,
+          0.0022980536529860164
+        ]
+      },
+      "coin": {
+        "log_loss": 0.6931471805599453,
+        "brier": 0.25,
+        "accuracy": 0.4675324675324675,
+        "mean_pred": 0.5,
+        "diff_vs_cond_mc": 0.017186072085612965,
+        "diff_ci95": [
+          -0.01191134421480098,
+          0.04597972388375774
+        ]
+      }
+    }
+  },
+  "penalties_given_extra_time": {
+    "n": 154,
+    "observed_rate": 0.6493506493506493,
+    "methods": {
+      "p_pens_given_et": {
+        "log_loss": 0.6662811472034426,
+        "brier": 0.23662927518772495,
+        "accuracy": 0.6753246753246753,
+        "mean_pred": 0.5472354384576574,
+        "diff_vs_p_pens_given_et": 0.0,
+        "diff_ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "p_pens_given_et_calibrated": {
+        "log_loss": 0.6529221226489536,
+        "brier": 0.23019409127976045,
+        "accuracy": 0.6623376623376623,
+        "mean_pred": 0.5830206114559471,
+        "diff_vs_p_pens_given_et": -0.013359024554489025,
+        "diff_ci95": [
+          -0.029509730309905596,
+          0.0033902454630464233
+        ]
+      }
+    }
+  },
+  "deployed_calibration": {
+    "draw_odds_factor": 1.5296190447911007,
+    "n_knockouts_draw_fit": 325,
+    "et_goal_factor": 0.24212913245876092,
+    "n_extra_times_goal_fit": 105,
+    "naive_et_goal_factor": 0.3333333333333333,
+    "fit_on": "knockouts before 2026-07-19 (draw: 2004+, extra-time goals: 2005+)"
+  }
+}

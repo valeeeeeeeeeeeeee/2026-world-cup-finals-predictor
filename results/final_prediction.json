@@ -3,63 +3,183 @@
     "venue": "East Rutherford",
     "date": "2026-07-19",
     "elo": {
-      "Spain": 2308.2,
-      "Argentina": 2286.7
+      "Spain": 2309.0,
+      "Argentina": 2287.9
     },
     "glicko2": {
       "Spain": {
-        "rating": 1889.3,
+        "rating": 1889.5,
         "rd": 67.5
       },
       "Argentina": {
-        "rating": 1922.5,
-        "rd": 70.6
+        "rating": 1922.9,
+        "rd": 70.7
       }
     },
     "poisson_expected_goals": {
-      "Spain": 1.12,
+      "Spain": 1.11,
       "Argentina": 1.17
     },
     "classifier_90min_prob": {
-      "home_win": 0.348,
-      "draw": 0.2768,
-      "away_win": 0.3752
+      "home_win": 0.3426,
+      "draw": 0.2766,
+      "away_win": 0.3808
     },
-    "monte_carlo_title_prob": {
-      "Spain": 0.4881,
-      "Argentina": 0.5119
+    "knockout_adjusted_90min_prob": {
+      "home_win": 0.2988,
+      "draw": 0.3691,
+      "away_win": 0.3321
     },
-    "classifier_title_prob": {
-      "Spain": 0.4892,
-      "Argentina": 0.5108
+    "knockout_adjustment": {
+      "draw_odds_factor": 1.5296,
+      "et_goal_factor": 0.2421,
+      "p_home_shootout": 0.5101,
+      "p_home_given_level_after_90": 0.501,
+      "p_penalties_given_extra_time": 0.6203
     },
-    "p_extra_time": 0.2862,
-    "p_penalties": 0.1537,
+    "p_extra_time": 0.3691,
+    "p_penalties": 0.2289,
     "most_likely_scores_90min": [
       {
         "score": "1 x 1",
-        "prob": 0.1332
-      },
-      {
-        "score": "0 x 1",
-        "prob": 0.1192
-      },
-      {
-        "score": "1 x 0",
-        "prob": 0.1137
+        "prob": 0.1706
       },
       {
         "score": "0 x 0",
-        "prob": 0.1017
+        "prob": 0.132
+      },
+      {
+        "score": "0 x 1",
+        "prob": 0.107
+      },
+      {
+        "score": "1 x 0",
+        "prob": 0.0997
       },
       {
         "score": "1 x 2",
-        "prob": 0.0767
+        "prob": 0.0701
       }
     ],
+    "score_matrix_90min": {
+      "rows": "Spain goals 0..6",
+      "cols": "Argentina goals 0..6",
+      "prob": [
+        [
+          0.132,
+          0.107,
+          0.062,
+          0.0242,
+          0.0075,
+          0.0014,
+          0.0005
+        ],
+        [
+          0.0997,
+          0.1706,
+          0.0701,
+          0.0265,
+          0.0074,
+          0.0019,
+          0.0004
+        ],
+        [
+          0.0546,
+          0.0635,
+          0.0574,
+          0.0148,
+          0.0047,
+          0.001,
+          0.0002
+        ],
+        [
+          0.0203,
+          0.0235,
+          0.014,
+          0.0083,
+          0.0015,
+          0.0006,
+          0.0001
+        ],
+        [
+          0.0054,
+          0.0075,
+          0.0038,
+          0.0012,
+          0.0008,
+          0.0001,
+          0.0001
+        ],
+        [
+          0.0014,
+          0.0017,
+          0.0011,
+          0.0002,
+          0.0001,
+          0.0,
+          0.0
+        ],
+        [
+          0.0002,
+          0.0004,
+          0.0002,
+          0.0001,
+          0.0,
+          0.0,
+          0.0
+        ]
+      ]
+    },
+    "method_breakdown_90min": {
+      "logistic": {
+        "away_win": 0.3411,
+        "draw": 0.3163,
+        "home_win": 0.3426
+      },
+      "catboost": {
+        "away_win": 0.4355,
+        "draw": 0.2618,
+        "home_win": 0.3027
+      },
+      "poisson_wdl": {
+        "away_win": 0.3715,
+        "draw": 0.2849,
+        "home_win": 0.3436
+      },
+      "fixed_blend_lr_cb": {
+        "away_win": 0.3741,
+        "draw": 0.2972,
+        "home_win": 0.3286
+      },
+      "equal_blend_3": {
+        "away_win": 0.3827,
+        "draw": 0.2877,
+        "home_win": 0.3297
+      },
+      "stacking_v2": {
+        "away_win": 0.3808,
+        "draw": 0.2766,
+        "home_win": 0.3426
+      },
+      "stack_blend_avg": {
+        "away_win": 0.3774,
+        "draw": 0.2869,
+        "home_win": 0.3356
+      }
+    },
+    "reference_title_prob": {
+      "monte_carlo": {
+        "Spain": 0.4886,
+        "Argentina": 0.5114
+      },
+      "classifier_unadjusted": {
+        "Spain": 0.4837,
+        "Argentina": 0.5163
+      }
+    },
     "final_title_probability": {
-      "Spain": 0.4887,
-      "Argentina": 0.5113
+      "Spain": 0.4837,
+      "Argentina": 0.5163
     },
     "predicted_champion": "Argentina"
   }

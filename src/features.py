@@ -150,6 +150,13 @@ def build_dataset(results: pd.DataFrame, cutoff_date: str | None = None):
                 "rest_diff": feats["rest_diff"],
                 "k_weight": match_k_factor(row.tournament),
                 "outcome": outcome,
+                # pre-match ratings (not model features; kept for plotting)
+                "home_elo": feats["home_elo"],
+                "away_elo": feats["away_elo"],
+                "home_glicko": feats["home_glicko"],
+                "away_glicko": feats["away_glicko"],
+                "home_glicko_rd": feats["home_glicko_rd"],
+                "away_glicko_rd": feats["away_glicko_rd"],
             }
         )
 

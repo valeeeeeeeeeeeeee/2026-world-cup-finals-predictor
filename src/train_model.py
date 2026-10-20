@@ -191,14 +191,10 @@ def main():
             "competitive": _metrics_from_proba(holdout["outcome"][comp_mask], proba[comp_mask]),
         }
 
-    candidates = {
-        "logistic": block(ho_lr),
-        "catboost": block(ho_cb),
-        "poisson_wdl": block(ho_pois),
-    }
+    holdout_probs = {"logistic": ho_lr, "catboost": ho_cb, "poisson_wdl": ho_pois}
     for name in COMBINERS:
-        candidates[name] = block(
-            combine_probs(name, ho_lr, ho_cb, ho_pois, ho_ctx, meta_eval))
+        holdout_probs[name] = combine_probs(name, ho_lr, ho_cb, ho_pois, ho_ctx, meta_eval)
+    candidates = {name: block(proba) for name, proba in holdout_probs.items()}
 
     deployed = min(COMBINERS, key=lambda n: candidates[n]["competitive"]["log_loss"])
 
@@ -230,6 +226,14 @@ def main():
     RESULTS_DIR.mkdir(exist_ok=True)
     with open(RESULTS_DIR / "classifier_metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)
+
+    # Row-level holdout predictions (for calibration plots / bootstrap CIs).
+    ho_out = holdout[["date", "home_team", "away_team", "k_weight", "outcome"]].reset_index(drop=True)
+    ho_out["competitive"] = comp_mask
+    for name, proba in holdout_probs.items():
+        for j, c in enumerate(CLASSES):
+            ho_out[f"{name}_{c}"] = proba[:, j]
+    ho_out.to_csv(RESULTS_DIR / "holdout_predictions.csv", index=False, float_format="%.5f")
     joblib.dump(
         {
             "combiner": deployed,
