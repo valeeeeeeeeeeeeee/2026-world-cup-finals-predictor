@@ -37,7 +37,9 @@ def recalibrate_draw(probs: np.ndarray, draw_odds_factor: float) -> np.ndarray:
     iD = CLASSES.index("D")
     pD = probs[:, iD]
     new_pD = draw_odds_factor * pD / (draw_odds_factor * pD + 1.0 - pD)
-    out = probs * ((1.0 - new_pD) / (1.0 - pD))[:, None]
+    # a certain draw (pD = 1) has no win/loss mass to rescale
+    scale = np.divide(1.0 - new_pD, 1.0 - pD, out=np.zeros_like(pD), where=pD < 1.0)
+    out = probs * scale[:, None]
     out[:, iD] = new_pD
     return out
 

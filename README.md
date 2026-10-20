@@ -294,6 +294,19 @@ re-runs see exactly the same data (results already include the semifinals: Spain
 2-0 France, Argentina 2-1 England; the cutoff keeps the final itself out of
 every fit).
 
+Tests (no dataset download needed; they run on synthetic data):
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+They cover the Glicko-2 worked example from Glickman's paper, known Elo
+K-factors and goal-difference multipliers, `poisson_wdl` normalization,
+edge cases of `recalibrate_draw`/`title_prob`, and leakage: flipping a
+match's result must not change that match's (or any earlier match's)
+features.
+
 To inspect or re-run the original pre-match forecast:
 
 ```bash
@@ -318,6 +331,7 @@ src/predict_final.py   full pipeline -> final prediction
 src/plots.py           figures (results/figures/*.png)
 src/knockout.py        knockout draw recalibration + extra-time/shootout model
 src/backtest_knockouts.py  title-method backtest on historical knockouts
+tests/                 pytest suite (rating engines, probabilities, leakage)
 results/               trained model + metrics + prediction (generated)
 ```
 

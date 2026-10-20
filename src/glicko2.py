@@ -78,6 +78,37 @@ def _new_volatility(phi: float, v: float, delta: float, sigma: float) -> float:
     return math.exp(A / 2.0)
 
 
+def rate_period(s: TeamState, games) -> TeamState:
+    """Glicko-2 update of `s` over one rating period (paper steps 2-8).
+    `games` is a list of (opponent TeamState, score, adv, opp_adv), where
+    `adv`/`opp_adv` are expected-score-only rating bumps (home advantage)."""
+    phi = s.rd / GLICKO2_SCALE
+    v_inv = 0.0
+    score_sum = 0.0
+    for opp, score, adv, opp_adv in games:
+        mu = (s.rating + adv - INITIAL_RATING) / GLICKO2_SCALE
+        mu_j = (opp.rating + opp_adv - INITIAL_RATING) / GLICKO2_SCALE
+        phi_j = opp.rd / GLICKO2_SCALE
+        E = _expected(mu, mu_j, phi_j)
+        g_j = _g(phi_j)
+        v_inv += g_j * g_j * E * (1.0 - E)
+        score_sum += g_j * (score - E)
+    v = 1.0 / v_inv
+    delta = v * score_sum
+
+    sigma_new = _new_volatility(phi, v, delta, s.vol)
+    phi_star = math.sqrt(phi * phi + sigma_new * sigma_new)
+    phi_new = 1.0 / math.sqrt(1.0 / (phi_star * phi_star) + 1.0 / v)
+    mu_base = (s.rating - INITIAL_RATING) / GLICKO2_SCALE  # persist without the adv bump
+    mu_new = mu_base + phi_new * phi_new * score_sum
+
+    return TeamState(
+        rating=INITIAL_RATING + GLICKO2_SCALE * mu_new,
+        rd=GLICKO2_SCALE * phi_new,
+        vol=sigma_new,
+    )
+
+
 @dataclass
 class Glicko2Engine:
     states: dict[str, TeamState] = field(default_factory=dict)
@@ -97,27 +128,7 @@ class Glicko2Engine:
                     adv: float, opp_adv: float) -> TeamState:
         """One-sided Glicko-2 update against a single opponent.
         `adv`/`opp_adv` are expected-score-only rating bumps (home advantage)."""
-        mu = (s.rating + adv - INITIAL_RATING) / GLICKO2_SCALE
-        phi = s.rd / GLICKO2_SCALE
-        mu_j = (opp.rating + opp_adv - INITIAL_RATING) / GLICKO2_SCALE
-        phi_j = opp.rd / GLICKO2_SCALE
-
-        E = _expected(mu, mu_j, phi_j)
-        g_j = _g(phi_j)
-        v = 1.0 / (g_j * g_j * E * (1.0 - E))
-        delta = v * g_j * (score - E)
-
-        sigma_new = _new_volatility(phi, v, delta, s.vol)
-        phi_star = math.sqrt(phi * phi + sigma_new * sigma_new)
-        phi_new = 1.0 / math.sqrt(1.0 / (phi_star * phi_star) + 1.0 / v)
-        mu_base = (s.rating - INITIAL_RATING) / GLICKO2_SCALE  # persist without the adv bump
-        mu_new = mu_base + phi_new * phi_new * g_j * (score - E)
-
-        return TeamState(
-            rating=INITIAL_RATING + GLICKO2_SCALE * mu_new,
-            rd=GLICKO2_SCALE * phi_new,
-            vol=sigma_new,
-        )
+        return rate_period(s, [(opp, score, adv, opp_adv)])
 
     def process_match(self, home_team: str, away_team: str,
                       home_score: float, away_score: float, neutral: bool) -> None:
