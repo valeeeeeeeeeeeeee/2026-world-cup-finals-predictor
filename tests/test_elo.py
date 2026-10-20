@@ -30,6 +30,25 @@ def test_k_factor_continental_qualifiers(tournament):
     assert match_k_factor(tournament) == 40
 
 
+@pytest.mark.parametrize("tournament", [
+    "CECAFA Cup",
+    "Gulf Cup",
+    "Island Games",
+    "AFF Championship",
+    "AFF Championship qualification",
+    # contain a continental name but are not that competition
+    "Australia Bicentenary Gold Cup",
+    "Bangladesh President's Gold Cup",
+])
+def test_k_factor_other_tournaments(tournament):
+    assert match_k_factor(tournament) == 30
+
+
+def test_k_factor_intercontinental_and_nations_league_qualifiers():
+    assert match_k_factor("CONMEBOL–UEFA Cup of Champions") == 50
+    assert match_k_factor("CONCACAF Nations League qualification") == 40
+
+
 @pytest.mark.parametrize("gd, mult", [
     (0, 1.0), (1, 1.0), (-1, 1.0),
     (2, 1.5), (-2, 1.5),

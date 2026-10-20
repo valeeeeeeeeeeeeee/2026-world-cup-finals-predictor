@@ -21,8 +21,9 @@ written by backtest_knockouts.py (fit only on knockouts played before the
 final). That backtest is also why the Monte Carlo is no longer averaged
 into the headline number: it scored worse than the classifier on 327
 historical knockouts. The simulation (50,000 runs, same extra-time factor)
-is kept for the scoreline matrix — rescaled so its win/draw/loss regions
-match step 2 — and its own title estimate is reported for reference.
+is kept only as a reference title estimate. The scoreline matrix is the
+exact Poisson score distribution (no sampling noise), rescaled so its
+win/draw/loss regions match step 2.
 """
 from __future__ import annotations
 
@@ -31,12 +32,13 @@ import json
 import joblib
 import numpy as np
 import pandas as pd
+from scipy.stats import poisson
 
 from combine import CLASSES, COMBINERS, combine_probs, poisson_wdl
 from data_io import load_results, RESULTS_DIR
 from features import build_dataset, fixture_features
 from knockout import NAIVE_ET_FACTOR, advance_given_level, recalibrate_draw, title_prob
-from poisson_model import PoissonGoalModel
+from train_model import _fit_poisson
 
 CUTOFF = "2026-07-19"
 N_SIMS = 50_000
@@ -87,17 +89,6 @@ def simulate_match(mu_home, mu_away, elo_diff_raw, n_sims=N_SIMS,
     else:
         p_penalties = 0.0
 
-    # Most likely 90-minute scorelines from the same simulated draws.
-    scores = pd.Series(zip(home_reg.tolist(), away_reg.tolist())).value_counts(normalize=True)
-    top_scores = [
-        {"score": f"{h} x {a}", "prob": round(float(p), 4)}
-        for (h, a), p in scores.head(5).items()
-    ]
-
-    score_matrix = np.zeros((SCORE_GRID, SCORE_GRID))
-    in_grid = (home_reg < SCORE_GRID) & (away_reg < SCORE_GRID)
-    np.add.at(score_matrix, (home_reg[in_grid], away_reg[in_grid]), 1.0 / n_sims)
-
     return {
         "mu_home": mu_home,
         "mu_away": mu_away,
@@ -107,9 +98,14 @@ def simulate_match(mu_home, mu_away, elo_diff_raw, n_sims=N_SIMS,
         "p_away_title": float(away_wins.mean()),
         "p_extra_time": p_extra_time,
         "p_penalties": p_penalties,
-        "top_scores": top_scores,
-        "score_matrix": score_matrix,
     }
+
+
+def score_matrix_90(mu_home: float, mu_away: float, n: int = SCORE_GRID) -> np.ndarray:
+    """Exact independent-Poisson probability of each 90-minute scoreline
+    (rows: home goals 0..n-1, cols: away goals 0..n-1)."""
+    k = np.arange(n)
+    return np.outer(poisson.pmf(k, mu_home), poisson.pmf(k, mu_away))
 
 
 def _base_signals(clf_bundle, feats: dict, mu_home: float, mu_away: float):
@@ -205,7 +201,8 @@ def main():
 
     home, away = FINAL["home"], FINAL["away"]
     feat_df, elo, glicko, form = build_dataset(results, cutoff_date=CUTOFF)
-    goal_model = PoissonGoalModel().fit(results, cutoff_date=CUTOFF)
+    # same rolling window as the Poisson base the meta-model was trained on
+    goal_model = _fit_poisson(results, pd.Timestamp(CUTOFF))
     clf_bundle = joblib.load(RESULTS_DIR / "classifier.joblib")
 
     feats = fixture_features(elo, glicko, form, home, away, neutral=True, match_date=FINAL["date"])
@@ -216,7 +213,8 @@ def main():
     calib = load_knockout_calibration()
     ko = knockout_title_prob(clf_bundle, feats, elo_diff_raw, mu_home, mu_away, calib)
     mc = simulate_match(mu_home, mu_away, elo_diff_raw, et_goal_factor=calib["et_goal_factor"])
-    score_matrix = rescale_score_matrix(mc["score_matrix"], mc["p_90"], ko["adj_90"])
+    p_90 = dict(zip(CLASSES, poisson_wdl(mu_home, mu_away)[0]))
+    score_matrix = rescale_score_matrix(score_matrix_90(mu_home, mu_away), p_90, ko["adj_90"])
     top = sorted(((score_matrix[h, a], h, a) for h in range(SCORE_GRID) for a in range(SCORE_GRID)),
                  reverse=True)[:5]
     top_scores = [{"score": f"{h} x {a}", "prob": round(float(p), 4)} for p, h, a in top]

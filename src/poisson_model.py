@@ -1,5 +1,6 @@
 """
-Dixon-Coles style Poisson goal model.
+Attack/defense Poisson goal model (Maher / Dixon-Coles style, without the
+Dixon-Coles low-score correction: home and away goals are independent).
 
 Each team gets an "attack" and "defense" strength learned via an L2
 regularized Poisson regression (sklearn PoissonRegressor) on a
@@ -9,7 +10,8 @@ team/opponent/home-flag design matrix built from every match goal tally:
                                                        + defense[opponent]
                                                        + home * is_home))
 
-Restricted to a recent window (2015-present) so the ratings reflect
+Restricted to a recent window (train_model.py and predict_final.py use a
+rolling 11 years; the default below is 2015-present) so the ratings reflect
 current squads rather than being dragged down by teams' form from
 50 years ago. L2 regularization keeps thinly-sampled teams close to
 average instead of overfitting on a handful of matches.
