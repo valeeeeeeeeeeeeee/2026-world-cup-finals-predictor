@@ -8,57 +8,57 @@
     },
     "glicko2": {
       "Spain": {
-        "rating": 1889.5,
-        "rd": 67.5
+        "rating": 1992.3,
+        "rd": 79.1
       },
       "Argentina": {
-        "rating": 1922.9,
-        "rd": 70.7
+        "rating": 2023.7,
+        "rd": 84.3
       }
     },
     "poisson_expected_goals": {
-      "Spain": 1.15,
-      "Argentina": 1.15
+      "Spain": 1.11,
+      "Argentina": 1.17
     },
     "classifier_90min_prob": {
-      "home_win": 0.3608,
-      "draw": 0.2735,
-      "away_win": 0.3657
+      "home_win": 0.3542,
+      "draw": 0.2776,
+      "away_win": 0.3683
     },
     "knockout_adjusted_90min_prob": {
-      "home_win": 0.3137,
-      "draw": 0.3683,
-      "away_win": 0.318
+      "home_win": 0.3076,
+      "draw": 0.3726,
+      "away_win": 0.3198
     },
     "knockout_adjustment": {
-      "draw_odds_factor": 1.5485,
-      "et_goal_factor": 0.2421,
+      "draw_odds_factor": 1.5459,
+      "et_goal_factor": 0.2431,
       "p_home_shootout": 0.5092,
-      "p_home_given_level_after_90": 0.5057,
-      "p_penalties_given_extra_time": 0.6176
+      "p_home_given_level_after_90": 0.5004,
+      "p_penalties_given_extra_time": 0.6199
     },
-    "p_extra_time": 0.3683,
-    "p_penalties": 0.2275,
+    "p_extra_time": 0.3726,
+    "p_penalties": 0.231,
     "most_likely_scores_90min": [
       {
         "score": "1 x 1",
-        "prob": 0.1723
+        "prob": 0.1736
       },
       {
         "score": "0 x 0",
-        "prob": 0.1296
+        "prob": 0.1341
       },
       {
         "score": "0 x 1",
-        "prob": 0.1019
+        "prob": 0.1032
       },
       {
         "score": "1 x 0",
-        "prob": 0.1006
+        "prob": 0.1021
       },
       {
         "score": "1 x 2",
-        "prob": 0.0678
+        "prob": 0.0668
       }
     ],
     "score_matrix_90min": {
@@ -66,61 +66,61 @@
       "cols": "Argentina goals 0..6",
       "prob": [
         [
-          0.1296,
-          0.1019,
-          0.0588,
-          0.0226,
-          0.0065,
-          0.0015,
+          0.1341,
+          0.1032,
+          0.0601,
+          0.0234,
+          0.0068,
+          0.0016,
           0.0003
         ],
         [
-          0.1006,
-          0.1723,
-          0.0678,
-          0.0261,
-          0.0075,
-          0.0017,
+          0.1021,
+          0.1736,
+          0.0668,
+          0.0259,
+          0.0076,
+          0.0018,
           0.0003
         ],
         [
-          0.058,
-          0.0669,
-          0.0573,
-          0.015,
-          0.0043,
+          0.0567,
+          0.0661,
+          0.0562,
+          0.0144,
+          0.0042,
           0.001,
           0.0002
         ],
         [
-          0.0223,
-          0.0257,
-          0.0148,
-          0.0085,
-          0.0017,
+          0.021,
+          0.0244,
+          0.0142,
+          0.0081,
+          0.0016,
           0.0004,
           0.0001
         ],
         [
-          0.0064,
-          0.0074,
-          0.0043,
-          0.0016,
+          0.0058,
+          0.0068,
+          0.004,
+          0.0015,
           0.0007,
           0.0001,
           0.0
         ],
         [
+          0.0013,
           0.0015,
-          0.0017,
-          0.001,
-          0.0004,
+          0.0009,
+          0.0003,
           0.0001,
           0.0,
           0.0
         ],
         [
-          0.0003,
+          0.0002,
           0.0003,
           0.0002,
           0.0001,
@@ -132,54 +132,54 @@
     },
     "method_breakdown_90min": {
       "logistic": {
-        "away_win": 0.3406,
-        "draw": 0.3176,
-        "home_win": 0.3418
+        "away_win": 0.3546,
+        "draw": 0.3075,
+        "home_win": 0.3379
       },
       "catboost": {
-        "away_win": 0.4309,
-        "draw": 0.267,
-        "home_win": 0.3021
+        "away_win": 0.3832,
+        "draw": 0.2637,
+        "home_win": 0.3531
       },
       "poisson_wdl": {
-        "away_win": 0.3584,
-        "draw": 0.2832,
-        "home_win": 0.3584
+        "away_win": 0.3712,
+        "draw": 0.2853,
+        "home_win": 0.3435
       },
       "fixed_blend_lr_cb": {
-        "away_win": 0.3722,
-        "draw": 0.2999,
-        "home_win": 0.3279
+        "away_win": 0.3646,
+        "draw": 0.2922,
+        "home_win": 0.3432
       },
       "equal_blend_3": {
-        "away_win": 0.3766,
-        "draw": 0.2893,
-        "home_win": 0.3341
+        "away_win": 0.3696,
+        "draw": 0.2855,
+        "home_win": 0.3448
       },
       "stacking_v2": {
-        "away_win": 0.3657,
-        "draw": 0.2735,
-        "home_win": 0.3608
+        "away_win": 0.3683,
+        "draw": 0.2776,
+        "home_win": 0.3542
       },
       "stack_blend_avg": {
-        "away_win": 0.3689,
-        "draw": 0.2867,
-        "home_win": 0.3444
+        "away_win": 0.3664,
+        "draw": 0.2849,
+        "home_win": 0.3487
       }
     },
     "reference_title_prob": {
       "monte_carlo": {
-        "Spain": 0.5022,
-        "Argentina": 0.4978
+        "Spain": 0.4882,
+        "Argentina": 0.5118
       },
       "classifier_unadjusted": {
-        "Spain": 0.5001,
-        "Argentina": 0.4999
+        "Spain": 0.4955,
+        "Argentina": 0.5045
       }
     },
     "final_title_probability": {
-      "Spain": 0.5,
-      "Argentina": 0.5
+      "Spain": 0.494,
+      "Argentina": 0.506
     },
     "predicted_champion": "Argentina"
   }
