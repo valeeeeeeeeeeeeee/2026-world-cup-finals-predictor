@@ -274,6 +274,10 @@ Full output: `results/knockout_backtest.json`, the row-level
 
 ## Running it
 
+Requires Python 3.13 (see `.python-version`); `requirements.txt` pins the
+exact library versions `results/classifier.joblib` was saved with, and the
+pickle may not load under other scikit-learn/CatBoost versions.
+
 ```bash
 pip install -r requirements.txt
 cd src
@@ -284,7 +288,9 @@ python plots.py               # renders the figures to results/figures/
 ```
 
 `results.csv`, `shootouts.csv` and `goalscorers.csv` are downloaded
-automatically on first run (results already include the semifinals: Spain
+automatically on first run from a pinned commit of the data repository
+(`DATA_COMMIT` in `src/data_io.py`) and checked against SHA-256 hashes, so
+re-runs see exactly the same data (results already include the semifinals: Spain
 2-0 France, Argentina 2-1 England; the cutoff keeps the final itself out of
 every fit).
 
