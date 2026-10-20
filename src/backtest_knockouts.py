@@ -48,7 +48,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from combine import CLASSES, combine_probs, poisson_wdl
+from combine import CLASSES, combine_probs
 from data_io import load_goalscorers, load_results, load_shootouts, RESULTS_DIR
 from elo import HOME_ADVANTAGE
 from features import build_dataset
@@ -145,7 +145,7 @@ def predict_edition(ed: pd.DataFrame, results, feat_df, oof, full_model: bool) -
     elo_raw = (rows["home_elo"] - rows["away_elo"]).to_numpy()
     tilt = shootout_win_prob(elo_raw)
     cond, p_pens_given_et = advance_given_level(mu_h, mu_a, tilt)
-    pois_p = poisson_wdl(mu_h, mu_a)
+    pois_p = pois.wdl(mu_h, mu_a)
 
     out = rows[KEY + ["edition", "tournament", "ko_start", "neutral", "pens", "went_et",
                       "et_goals", "home_advanced"]].copy()

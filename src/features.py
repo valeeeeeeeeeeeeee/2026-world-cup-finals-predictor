@@ -90,7 +90,7 @@ def _row_features(elo, glicko, form, date, home, away, neutral):
         "elo_diff": (home_elo + home_adv) - away_elo,
         "elo_sum": home_elo + away_elo,
         "glicko_diff": (glicko.rating(home) + home_adv) - glicko.rating(away),
-        "glicko_rd_diff": glicko.rd(home) - glicko.rd(away),
+        "glicko_rd_diff": glicko.rd(home, date) - glicko.rd(away, date),
         "neutral": int(neutral),
         "form_ppg_diff": home_ppg - away_ppg,
         "form_gf_diff": home_gf - away_gf,
@@ -100,8 +100,8 @@ def _row_features(elo, glicko, form, date, home, away, neutral):
         "away_elo": away_elo,
         "home_glicko": glicko.rating(home),
         "away_glicko": glicko.rating(away),
-        "home_glicko_rd": glicko.rd(home),
-        "away_glicko_rd": glicko.rd(away),
+        "home_glicko_rd": glicko.rd(home, date),
+        "away_glicko_rd": glicko.rd(away, date),
     }
 
 
@@ -162,7 +162,7 @@ def build_dataset(results: pd.DataFrame, cutoff_date: str | None = None):
 
         # Update state AFTER recording features (no leakage).
         elo.process_match(row.date, home, away, hs, as_, row.tournament, neutral)
-        glicko.process_match(home, away, hs, as_, neutral)
+        glicko.process_match(home, away, hs, as_, neutral, row.date)
         form.update(home, home_pts, int(hs), int(as_), row.date)
         form.update(away, away_pts, int(as_), int(hs), row.date)
 

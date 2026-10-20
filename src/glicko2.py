@@ -14,14 +14,17 @@ Implementation notes:
   - Home advantage is applied the same way the Elo engine applies it: as a
     rating bump inside the expected-score calculation only (never persisted
     into the stored rating), converted to the Glicko-2 internal scale.
-  - No idle-time RD inflation between periods; with per-match periods and
-    national teams playing regularly this second-order effect is dropped
-    for simplicity.
+  - Idle-time RD inflation (optional, IDLE_PERIOD_DAYS): with per-match
+    periods, RD would only reflect how many matches a team has played. The
+    paper's step 6 for a team that skips a period (phi' = sqrt(phi^2 +
+    sigma^2)) is applied once per IDLE_PERIOD_DAYS since the team's last
+    match, capped at the initial RD, before the next update and whenever
+    the RD is read for a fixture.
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 INITIAL_RATING = 1500.0
 INITIAL_RD = 350.0
@@ -30,6 +33,9 @@ TAU = 0.5           # volatility constraint (0.3-1.2 typical; 0.5 is standard)
 GLICKO2_SCALE = 173.7178
 HOME_ADVANTAGE = 100.0  # rating points, expected-score calc only (mirrors elo.py)
 EPS = 1e-6
+# 30 days chosen on pre-2019 data: Glicko-2's own predictive log-loss on
+# 2000-2018 matches 0.5623 (no inflation) -> 0.5593 (14 d: 0.5603, 90 d: 0.5599).
+IDLE_PERIOD_DAYS = 30  # days of inactivity per extra rating period; None = no inflation
 
 
 @dataclass
@@ -37,6 +43,20 @@ class TeamState:
     rating: float = INITIAL_RATING
     rd: float = INITIAL_RD
     vol: float = INITIAL_VOL
+    last_played: object = None  # date of the last match (for idle-time RD inflation)
+
+
+def inflate_idle(s: TeamState, date, period_days=None) -> TeamState:
+    """RD after the idle time between s.last_played and `date`: one
+    paper-step-6 inflation per `period_days` (fractional), capped at
+    INITIAL_RD."""
+    period_days = IDLE_PERIOD_DAYS if period_days is None else period_days
+    if not period_days or s.last_played is None or date is None:
+        return s
+    periods = max((date - s.last_played).days, 0) / period_days
+    phi = s.rd / GLICKO2_SCALE
+    rd = GLICKO2_SCALE * math.sqrt(phi * phi + periods * s.vol * s.vol)
+    return replace(s, rd=min(rd, INITIAL_RD))
 
 
 def _g(phi: float) -> float:
@@ -121,8 +141,9 @@ class Glicko2Engine:
     def rating(self, team: str) -> float:
         return self._state(team).rating
 
-    def rd(self, team: str) -> float:
-        return self._state(team).rd
+    def rd(self, team: str, as_of=None) -> float:
+        """RD now, or as of a later date (idle-time inflation applied)."""
+        return inflate_idle(self._state(team), as_of).rd
 
     def _update_one(self, s: TeamState, opp: TeamState, score: float,
                     adv: float, opp_adv: float) -> TeamState:
@@ -131,8 +152,10 @@ class Glicko2Engine:
         return rate_period(s, [(opp, score, adv, opp_adv)])
 
     def process_match(self, home_team: str, away_team: str,
-                      home_score: float, away_score: float, neutral: bool) -> None:
-        home, away = self._state(home_team), self._state(away_team)
+                      home_score: float, away_score: float, neutral: bool,
+                      date=None) -> None:
+        home = inflate_idle(self._state(home_team), date)
+        away = inflate_idle(self._state(away_team), date)
         if home_score > away_score:
             s_home = 1.0
         elif home_score < away_score:
@@ -143,8 +166,8 @@ class Glicko2Engine:
         adv = 0.0 if neutral else HOME_ADVANTAGE
         new_home = self._update_one(home, away, s_home, adv, 0.0)
         new_away = self._update_one(away, home, 1.0 - s_home, 0.0, adv)
-        self.states[home_team] = new_home
-        self.states[away_team] = new_away
+        self.states[home_team] = replace(new_home, last_played=date)
+        self.states[away_team] = replace(new_away, last_played=date)
 
 
 if __name__ == "__main__":
@@ -160,7 +183,7 @@ if __name__ == "__main__":
     engine = Glicko2Engine()
     for row in df.itertuples(index=False):
         engine.process_match(row.home_team, row.away_team,
-                             row.home_score, row.away_score, bool(row.neutral))
+                             row.home_score, row.away_score, bool(row.neutral), row.date)
 
     top = sorted(engine.states.items(), key=lambda kv: -kv[1].rating)[:10]
     print("Top 10 Glicko-2 on the eve of the final (2026-07-19):")
