@@ -4,8 +4,9 @@ Publication-quality figures for the final prediction and model validation.
 Reads the artifacts written by train_model.py and predict_final.py and saves
 PNGs to results/figures/:
 
-  1. score_heatmap.png     90-minute scoreline probabilities (Monte Carlo)
-  2. outcome_by_method.png 90-minute W/D/L per method + implied title odds
+  1. score_heatmap.png     90-minute scoreline probabilities (knockout-adjusted)
+  2. outcome_by_method.png raw 90-minute W/D/L per method + title odds after
+                           the knockout adjustment
   3. calibration.png       reliability diagram of the deployed combiner
                            (competitive holdout, >= 2019)
   4. logloss_ci.png        holdout log-loss per candidate with 95% bootstrap
@@ -30,7 +31,8 @@ from matplotlib.transforms import offset_copy  # noqa: E402
 
 from combine import CLASSES, EPS  # noqa: E402
 from data_io import RESULTS_DIR  # noqa: E402
-from predict_final import FINAL, shootout_win_prob  # noqa: E402
+from knockout import recalibrate_draw, title_prob  # noqa: E402
+from predict_final import FINAL  # noqa: E402
 
 FIG_DIR = RESULTS_DIR / "figures"
 HOME, AWAY = FINAL["home"], FINAL["away"]
@@ -146,7 +148,8 @@ def plot_score_heatmap(pred: dict):
     cb.ax.tick_params(color=MUTED, labelcolor=INK_2, length=2)
     xg = pred["poisson_expected_goals"]
     _header(fig, f"Most likely 90-minute scorelines — {HOME} vs {AWAY}",
-            f"Monte Carlo, 50,000 runs · expected goals {HOME} {xg[HOME]:.2f} – {xg[AWAY]:.2f} {AWAY}\n"
+            f"Poisson scoreline shape, rescaled to the knockout-adjusted W/D/L · expected goals "
+            f"{HOME} {xg[HOME]:.2f} – {xg[AWAY]:.2f} {AWAY}\n"
             f"Dashed cells = draw after 90' → extra time ({pred['p_extra_time']:.1%})")
     _save(fig, "score_heatmap.png")
 
@@ -154,7 +157,7 @@ def plot_score_heatmap(pred: dict):
 # --------------------------------------------------------------------------- 2
 def plot_outcome_by_method(pred: dict, deployed: str):
     breakdown = pred["method_breakdown_90min"]
-    p_shoot = shootout_win_prob(pred["elo"][HOME] - pred["elo"][AWAY])
+    ka = pred["knockout_adjustment"]
     order = ["logistic", "catboost", "poisson_wdl", "fixed_blend_lr_cb",
              "equal_blend_3", "stack_blend_avg", "stacking_v2"]
     order = [m for m in order if m in breakdown]
@@ -177,7 +180,9 @@ def plot_outcome_by_method(pred: dict, deployed: str):
             ax.text(left + val / 2, y, f"{val:.1%}", ha="center", va="center", fontsize=9,
                     color=INK if color == DRAW else "white", fontweight="bold")
             left += val
-        title_home = p["home_win"] + p["draw"] * p_shoot
+        adj = recalibrate_draw(np.array([[p["away_win"], p["draw"], p["home_win"]]]),
+                               ka["draw_odds_factor"])
+        title_home = float(title_prob(adj, ka["p_home_given_level_after_90"])[0])
         ax.text(1.03, y, f"{title_home:.1%}", ha="left", va="center", fontsize=9.5,
                 color=INK_2)
         ax.text(1.13, y, f"{1 - title_home:.1%}", ha="left", va="center", fontsize=9.5,
@@ -199,8 +204,10 @@ def plot_outcome_by_method(pred: dict, deployed: str):
     ax.legend(loc="lower left", bbox_to_anchor=(0, 1.0), ncol=3, fontsize=9, handlelength=1.2)
     final = pred["final_title_probability"]
     _header(fig, "90-minute outcome by method",
-            f"Title columns reassign the draw via the Elo-tilted shootout ({p_shoot:.0%} {HOME}). "
-            f"Final ensemble (Monte Carlo + stacking): {HOME} {final[HOME]:.1%} · {AWAY} {final[AWAY]:.1%}",
+            f"Bars: raw 90' forecast. Title columns: draw odds ×{ka['draw_odds_factor']:.2f} (knockout "
+            f"recalibration), then {HOME} wins a level tie {ka['p_home_given_level_after_90']:.1%} "
+            f"(extra time + shootout).\nPublished (Stacking v2): {HOME} {final[HOME]:.1%} · "
+            f"{AWAY} {final[AWAY]:.1%}",
             extra_pt=22)
     _save(fig, "outcome_by_method.png")
 
