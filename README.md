@@ -162,10 +162,14 @@ Paired bootstrap 95% CIs vs. the previously published ensemble.
 | **Knockout-adjusted stacking (deployed)** | **0.5964** | **−0.0051 [−0.0099, −0.0004]** |
 | Elo expected score only | 0.5946 | −0.0069 [−0.0224, +0.0089] |
 
+![Knockout methods](results/figures/knockout_methods.png)
+
 | Sub-model check | Observed | Before | After adjustment |
 |---|---|---|---|
 | P(level after 90'), 326 knockouts 2004+ | 34.0% | 25.2% (log-loss 0.654) | 33.6% (log-loss 0.640) |
 | P(penalties \| extra time), 154 extra times 1986+ | 64.9% | 54.7% (log-loss 0.666) | 58.3% (log-loss 0.653) |
+
+![Knockout sub-models](results/figures/knockout_submodels.png)
 
 Findings:
 

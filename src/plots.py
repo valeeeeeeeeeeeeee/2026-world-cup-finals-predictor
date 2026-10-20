@@ -1,7 +1,8 @@
 """
 Publication-quality figures for the final prediction and model validation.
 
-Reads the artifacts written by train_model.py and predict_final.py and saves
+Reads the artifacts written by train_model.py, backtest_knockouts.py and
+predict_final.py and saves
 PNGs to results/figures/:
 
   1. score_heatmap.png     90-minute scoreline probabilities (knockout-adjusted)
@@ -12,6 +13,11 @@ PNGs to results/figures/:
   4. logloss_ci.png        holdout log-loss per candidate with 95% bootstrap
                            CIs, and paired difference vs. the deployed model
   5. rating_history.png    Elo and Glicko-2 (+-2 RD band) of both finalists
+  6. knockout_methods.png  knockout backtest: who-advances log-loss per title
+                           method, paired difference vs. the old ensemble
+  7. knockout_submodels.png knockout backtest: P(level after 90') and
+                           P(penalties | extra time), observed vs. predicted
+                           before and after the knockout adjustment
 
 Colors: Spain = orange, Argentina = blue, draw = neutral gray (the pair
 passes the CVD / contrast checks); every series is also direct-labeled.
@@ -388,6 +394,102 @@ def plot_rating_history(hist: pd.DataFrame, pred: dict):
     _save(fig, "rating_history.png")
 
 
+KO_METHOD_LABELS = {
+    "calibrated": "Knockout-adjusted stacking",
+    "hybrid": "Stacking + naive extra time",
+    "classifier": "Stacking + shootout tilt",
+    "elo_only": "Elo only",
+    "ensemble": "Old ensemble (MC + stacking)",
+    "monte_carlo": "Monte Carlo",
+}
+
+
+# --------------------------------------------------------------------------- 6
+def plot_knockout_methods(bt: dict):
+    block = bt["advance_all_knockouts"]
+    rows = sorted(block["methods"].items(), key=lambda kv: kv[1]["diff_vs_ensemble"],
+                  reverse=True)
+    fig, ax = plt.subplots(figsize=(9.5, 0.55 * len(rows) + 1.4))
+    ax.grid(axis="y", visible=False)
+    ax.spines["left"].set_visible(False)
+    ax.tick_params(axis="y", length=0)
+    ax.axvline(0, color=INK, lw=0.8)
+    for y, (m, r) in enumerate(rows):
+        dep = m == "calibrated"
+        c = INK if dep else MUTED
+        if m == "ensemble":
+            ax.text(0.0006, y, f"reference · log-loss {r['log_loss']:.4f}", va="center",
+                    fontsize=8.5, color=MUTED)
+            continue
+        lo, hi = r["diff_ci95"]
+        ax.hlines(y, lo, hi, color=c, lw=2, alpha=0.6)
+        ax.scatter(r["diff_vs_ensemble"], y, s=60 if dep else 44, color=c, edgecolor=SURFACE,
+                   lw=1.5, zorder=3)
+        ax.text(hi + 0.0008, y, f"{r['diff_vs_ensemble']:+.4f}  (log-loss {r['log_loss']:.4f})",
+                va="center", fontsize=8.5, color=INK if dep else INK_2,
+                fontweight="bold" if dep else "normal")
+    ax.set_yticks(range(len(rows)))
+    ax.set_yticklabels([KO_METHOD_LABELS.get(m, m) + ("  (deployed)" if m == "calibrated" else "")
+                        for m, _ in rows])
+    for t, (m, _) in zip(ax.get_yticklabels(), rows):
+        if m == "calibrated":
+            t.set_fontweight("bold")
+            t.set_color(INK)
+    lo = min(r["diff_ci95"][0] for _, r in rows)
+    hi = max(r["diff_ci95"][1] for _, r in rows)
+    ax.set_xlim(lo - 0.002, hi + 0.016)
+    ax.set_xlabel("Paired log-loss difference vs. the old ensemble  (< 0 = better)")
+    _header(fig, "Knockout backtest: which title method predicts who advances?",
+            f"{block['n']} World Cup / Euro / AFCON / Asian Cup knockouts 2004–2026, every model refit "
+            f"before each edition. 95% paired bootstrap CIs.\nDropping the Monte Carlo is what beats "
+            f"the old ensemble; the remaining methods are within noise of each other.")
+    _save(fig, "knockout_methods.png")
+
+
+# --------------------------------------------------------------------------- 7
+def plot_knockout_submodels(bt: dict):
+    panels = [
+        ("level_after_90", "Level after 90'", "p_level90_stacking", "p_level90_calibrated",
+         "Before (raw stacking)", "After (draw odds ×{lam:.2f})"),
+        ("penalties_given_extra_time", "Penalties, given extra time", "p_pens_given_et",
+         "p_pens_given_et_calibrated", "Before (ET factor 1/3)",
+         "After (ET factor {phi:.3f})"),
+    ]
+    cal = bt["deployed_calibration"]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 2.9), gridspec_kw={"wspace": 0.45})
+    for ax, (key, title, before, after, lb, la) in zip(axes, panels):
+        block = bt[key]
+        n, obs = block["n"], block["observed_rate"]
+        lo, hi = _wilson(obs * n, n)
+        rows = [("Observed", obs, INK_2), (lb, block["methods"][before]["mean_pred"], MUTED),
+                (la.format(lam=cal["draw_odds_factor"], phi=cal["et_goal_factor"]),
+                 block["methods"][after]["mean_pred"], INK)]
+        ax.axvspan(lo, hi, color=DRAW, alpha=0.35, lw=0)
+        ax.axvline(obs, color=INK_2, lw=0.8, ls="--")
+        for y, (label, v, c) in enumerate(reversed(rows)):
+            ax.scatter(v, y, s=60, color=c, edgecolor=SURFACE, lw=1.5, zorder=3)
+            ax.annotate(f"{v:.1%}", (v, y), xytext=(0, 9), textcoords="offset points",
+                        ha="center", va="bottom", fontsize=9, color=INK,
+                        fontweight="bold" if c == INK else "normal",
+                        bbox={"boxstyle": "square,pad=0.1", "fc": SURFACE, "ec": "none"})
+        ax.set_yticks(range(len(rows)))
+        ax.set_yticklabels([r[0] for r in reversed(rows)])
+        ax.set_ylim(-0.5, len(rows) - 0.1)
+        ax.grid(axis="y", visible=False)
+        ax.spines["left"].set_visible(False)
+        ax.tick_params(axis="y", length=0)
+        ax.xaxis.set_major_formatter(lambda v, _: f"{v:.0%}")
+        ax.set_xlim(min(r[1] for r in rows + [("", lo, "")]) - 0.04,
+                    max(r[1] for r in rows + [("", hi, "")]) + 0.04)
+        ax.set_title(f"{title}  (n = {n})", fontsize=11)
+    _header(fig, "Knockout backtest: draws and extra time, observed vs. predicted",
+            "Mean predicted rate before and after the knockout adjustment; shaded band = 95% "
+            "Wilson interval of the observed rate. Level after 90': knockouts 2004+;\n"
+            "penalties: extra times 1986+. Parameters re-estimated before each edition from "
+            "earlier knockouts only.", extra_pt=6)
+    _save(fig, "knockout_submodels.png")
+
+
 def main():
     _style()
     with open(RESULTS_DIR / "final_prediction.json") as f:
@@ -402,6 +504,10 @@ def main():
     plot_calibration(ho, deployed)
     plot_logloss_ci(ho, deployed)
     plot_rating_history(hist, pred)
+    with open(RESULTS_DIR / "knockout_backtest.json") as f:
+        bt = json.load(f)
+    plot_knockout_methods(bt)
+    plot_knockout_submodels(bt)
 
 
 if __name__ == "__main__":
